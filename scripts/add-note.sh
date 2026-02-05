@@ -16,6 +16,8 @@ if [ ! -f "$CONFIG_FILE" ]; then
 fi
 
 INITIATIVES_DIR=$(jq -r '.directories[] | select(.default == true) | .path' "$CONFIG_FILE")
+# Expand tilde to home directory
+INITIATIVES_DIR="${INITIATIVES_DIR/#\~/$HOME}"
 
 # Show help
 if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
