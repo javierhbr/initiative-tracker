@@ -8,6 +8,11 @@
       "name": "Personal",
       "path": "./initiatives",
       "default": true
+    },
+    {
+      "name": "Personal-2",
+      "path": "./initiatives",
+      "default": false
     }
   ]
 }

@@ -21,11 +21,20 @@ Sistema personal para tracking de iniciativas cross-team usando **Markdown + scr
 ### Opción 1: Web UI (Recomendado)
 
 ```bash
-# Iniciar servidor
+# Opción A: Todo en uno - Iniciar y abrir navegador automáticamente
+./scripts/manage.sh open-ui
+
+# Opción B: Iniciar servidor manualmente
+./scripts/manage.sh start
+
+# Opción C: Directamente con Python
 python3 server.py
 
-# Abrir navegador
+# Abrir navegador manualmente
 open http://localhost:3939
+
+# Detener servidor
+./scripts/manage.sh stop
 ```
 
 La interfaz web incluye:
@@ -36,7 +45,64 @@ La interfaz web incluye:
 - 🔍 Búsqueda full-text en tiempo real
 - 📁 Soporte multi-directorio (Personal, Work, etc.)
 
-### Opción 2: CLI Scripts
+### Opción 2: Unified Interactive Script (Recomendado para CLI)
+
+El script unificado `manage.sh` soporta tanto modo interactivo como CLI con parámetros:
+
+#### Modo Interactivo
+```bash
+# Lanzar menú interactivo
+./scripts/manage.sh
+
+# Menú con opciones:
+# 1) Create new initiative
+# 2) Add note to initiative
+# 3) Log communication
+# 4) List all initiatives
+# 5) Start web server
+# 6) Stop web server
+# 7) Server status
+# 8) Open UI in browser
+# 9) Help
+# 0) Exit
+```
+
+#### Modo CLI con Parámetros
+```bash
+# Gestión del servidor
+./scripts/manage.sh open-ui            # Iniciar servidor y abrir navegador
+./scripts/manage.sh start              # Iniciar servidor web
+./scripts/manage.sh stop               # Detener servidor web
+./scripts/manage.sh status             # Ver estado del servidor
+
+# Crear iniciativa
+./scripts/manage.sh new FRAUD-2026-01 "Fraud Real-time Signals Integration"
+
+# Agregar nota
+./scripts/manage.sh note FRAUD-2026-01 "Product alignment delayed"
+
+# Registrar comunicación
+./scripts/manage.sh comm FRAUD-2026-01 Slack "https://slack/..." "Kickoff with Risk"
+
+# Listar todas las iniciativas
+./scripts/manage.sh list
+
+# Ver ayuda
+./scripts/manage.sh --help
+```
+
+**Características:**
+- ✅ Gestión del servidor web (start/stop/status)
+- ✅ Modo interactivo con prompts paso a paso
+- ✅ Modo CLI para scripting y automatización
+- ✅ Soporte multi-directorio con selector interactivo
+- ✅ Validación de inputs con mensajes claros
+- ✅ Auto-expansión de tilde (`~/path`) en config.json
+- ✅ Servidor en background con gestión de PID
+
+### Opción 3: Scripts Individuales (Legacy)
+
+Los scripts originales siguen disponibles para compatibilidad:
 
 ```bash
 # Crear iniciativa
@@ -49,7 +115,7 @@ La interfaz web incluye:
 ./scripts/add-comm.sh FRAUD-2026-01 Slack "https://slack/..." "Kickoff with Risk"
 ```
 
-### Opción 3: Claude Code Skill
+### Opción 4: Claude Code Skill
 
 Si usas Claude Code, el proyecto incluye un skill completo:
 
@@ -77,9 +143,10 @@ personal-initiative-tracker/
 │       └── links.md         # Referencias externas
 │
 ├── scripts/                 # Scripts CLI
-│   ├── new-initiative.sh    # Crear nueva iniciativa
-│   ├── add-note.sh         # Agregar nota con auto-fecha
-│   └── add-comm.sh         # Registrar comunicación
+│   ├── manage.sh           # Script unificado interactivo + CLI (RECOMENDADO)
+│   ├── new-initiative.sh    # Crear nueva iniciativa (legacy)
+│   ├── add-note.sh         # Agregar nota con auto-fecha (legacy)
+│   └── add-comm.sh         # Registrar comunicación (legacy)
 │
 ├── .claude/skills/initiative-manager/  # Claude Code Skill
 │   ├── SKILL.md            # Definición del skill
@@ -288,7 +355,7 @@ Edita `config.json` para separar iniciativas por contexto:
     },
     {
       "name": "Work",
-      "path": "./work-initiatives",
+      "path": "~/work-initiatives",
       "default": false
     },
     {
@@ -305,6 +372,24 @@ Edita `config.json` para separar iniciativas por contexto:
 - Organizar por cliente
 - Archivar iniciativas completadas
 - Separar por año
+
+### Comportamiento por Herramienta
+
+**Web UI:**
+- Selector de directorio en el dashboard
+- Cambio instantáneo entre directorios
+
+**Script Unificado (manage.sh):**
+- **Modo Interactivo:** Prompt para seleccionar directorio al crear iniciativa
+- **Modo CLI:** Usa el directorio marcado como `"default": true`
+
+**Scripts Individuales (legacy):**
+- Siempre usan el directorio marcado como `"default": true`
+
+**Soporte de Rutas:**
+- ✅ Rutas relativas: `./initiatives`
+- ✅ Rutas absolutas: `/Users/nombre/initiatives`
+- ✅ Tilde expansion: `~/Documents/initiatives` (se expande automáticamente)
 
 ---
 
@@ -587,12 +672,23 @@ Initiative   →  "Contexto" que conecta todo + ownership + decisiones
    chmod +x .claude/skills/initiative-manager/scripts/lib/*.sh
    ```
 
-4. **Iniciar servidor**
+4. **Instalar dependencias** (opcional pero recomendado)
+   ```bash
+   # jq - Para parsear config.json (requerido para manage.sh)
+   brew install jq  # macOS
+   apt-get install jq  # Linux
+
+   # ripgrep - Para búsquedas más rápidas (opcional)
+   brew install ripgrep  # macOS
+   apt-get install ripgrep  # Linux
+   ```
+
+5. **Iniciar servidor**
    ```bash
    python3 server.py
    ```
 
-5. **Abrir navegador**
+6. **Abrir navegador**
    ```
    http://localhost:3939
    ```
@@ -621,23 +717,37 @@ No requiere configuración adicional. Solo menciona "initiative" o "EPIC" en tu 
 7. Agregar comunicación
 8. Cambiar directorio (si tienes múltiples configurados)
 
-### Test Manual - CLI
+### Test Manual - CLI (Script Unificado)
+
+```bash
+# Test modo interactivo
+./scripts/manage.sh
+# Seguir prompts del menú
+
+# Test modo CLI
+./scripts/manage.sh new TEST-2026-99 "Test Initiative"
+./scripts/manage.sh note TEST-2026-99 "This is a test note"
+./scripts/manage.sh comm TEST-2026-99 Slack "https://test" "Test comm"
+./scripts/manage.sh list
+
+# Test help
+./scripts/manage.sh --help
+
+# Cleanup
+rm -rf initiatives/TEST-2026-99
+```
+
+### Test Manual - CLI (Scripts Legacy)
 
 ```bash
 # Test crear
-./scripts/new-initiative.sh TEST-2026-99 "Test Initiative" Discovery
+./scripts/new-initiative.sh TEST-2026-99 "Test Initiative"
 
 # Test agregar nota
 ./scripts/add-note.sh TEST-2026-99 "This is a test note"
 
 # Test agregar comm
 ./scripts/add-comm.sh TEST-2026-99 Slack "https://test" "Test comm"
-
-# Test listar
-.claude/skills/initiative-manager/scripts/list-initiatives.sh
-
-# Test buscar
-.claude/skills/initiative-manager/scripts/search-initiatives.sh "test"
 
 # Cleanup
 rm -rf initiatives/TEST-2026-99

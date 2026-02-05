@@ -17,6 +17,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/../config.json"
 INITIATIVES_DIR=""
+PID_FILE="$SCRIPT_DIR/../.server.pid"
+SERVER_SCRIPT="$SCRIPT_DIR/../server.py"
 
 # Load configuration
 load_config() {
@@ -164,13 +166,21 @@ USAGE:
     ./manage.sh comm <ID> <CHANNEL> <LINK> <CONTEXT>
                                    Log communication entry
     ./manage.sh list               List all initiatives
+    ./manage.sh start              Start web server
+    ./manage.sh stop               Stop web server
+    ./manage.sh status             Check server status
+    ./manage.sh open-ui            Open UI in browser
     ./manage.sh --help             Show this help
 
 EXAMPLES:
+  ./manage.sh open-ui
+  ./manage.sh start
   ./manage.sh new ABC-2026-01 "Fraud Detection Integration"
   ./manage.sh note ABC-2026-01 "Kickoff meeting scheduled"
   ./manage.sh comm ABC-2026-01 Slack https://slack/... "Risk approval"
   ./manage.sh list
+  ./manage.sh status
+  ./manage.sh stop
 
 CONFIGURATION:
   Config file: $CONFIG_FILE
@@ -196,6 +206,159 @@ EOF
     fi
 
     echo ""
+}
+
+# ============================================================================
+# Server Management Functions
+# ============================================================================
+
+# Check if server is running
+is_server_running() {
+    if [ -f "$PID_FILE" ]; then
+        local pid=$(cat "$PID_FILE")
+        if ps -p "$pid" > /dev/null 2>&1; then
+            return 0  # Server is running
+        else
+            # PID file exists but process is dead
+            rm -f "$PID_FILE"
+            return 1
+        fi
+    fi
+    return 1  # Not running
+}
+
+# Start the server
+cmd_start_server() {
+    if is_server_running; then
+        local pid=$(cat "$PID_FILE")
+        echo "✗ Error: Server is already running (PID: $pid)"
+
+        # Read config to show URL
+        local host=$(jq -r '.server.host // "localhost"' "$CONFIG_FILE")
+        local port=$(jq -r '.server.port // 3939' "$CONFIG_FILE")
+        echo "  Server URL: http://$host:$port"
+        return 1
+    fi
+
+    if [ ! -f "$SERVER_SCRIPT" ]; then
+        echo "✗ Error: Server script not found at $SERVER_SCRIPT"
+        return 1
+    fi
+
+    echo "Starting server..."
+
+    # Get server config
+    local host=$(jq -r '.server.host // "localhost"' "$CONFIG_FILE")
+    local port=$(jq -r '.server.port // 3939' "$CONFIG_FILE")
+
+    # Start server in background
+    cd "$SCRIPT_DIR/.."
+    nohup python3 "$SERVER_SCRIPT" > /dev/null 2>&1 &
+    local pid=$!
+
+    # Save PID
+    echo "$pid" > "$PID_FILE"
+
+    # Wait a moment and verify it started
+    sleep 1
+    if is_server_running; then
+        echo "✓ Server started successfully (PID: $pid)"
+        echo "  Server URL: http://$host:$port"
+        echo "  Stop with: $0 stop"
+    else
+        echo "✗ Error: Server failed to start"
+        rm -f "$PID_FILE"
+        return 1
+    fi
+}
+
+# Stop the server
+cmd_stop_server() {
+    if ! is_server_running; then
+        echo "✗ Server is not running"
+        return 1
+    fi
+
+    local pid=$(cat "$PID_FILE")
+    echo "Stopping server (PID: $pid)..."
+
+    kill "$pid" 2>/dev/null
+
+    # Wait for process to stop
+    local count=0
+    while ps -p "$pid" > /dev/null 2>&1 && [ $count -lt 10 ]; do
+        sleep 0.5
+        count=$((count + 1))
+    done
+
+    if ps -p "$pid" > /dev/null 2>&1; then
+        echo "✗ Server did not stop gracefully, forcing..."
+        kill -9 "$pid" 2>/dev/null
+    fi
+
+    rm -f "$PID_FILE"
+    echo "✓ Server stopped"
+}
+
+# Get server status
+cmd_server_status() {
+    if is_server_running; then
+        local pid=$(cat "$PID_FILE")
+        local host=$(jq -r '.server.host // "localhost"' "$CONFIG_FILE")
+        local port=$(jq -r '.server.port // 3939' "$CONFIG_FILE")
+
+        echo "✓ Server is running"
+        echo "  PID: $pid"
+        echo "  URL: http://$host:$port"
+    else
+        echo "✗ Server is not running"
+        return 1
+    fi
+}
+
+# Open UI in browser
+cmd_open_ui() {
+    local host=$(jq -r '.server.host // "localhost"' "$CONFIG_FILE")
+    local port=$(jq -r '.server.port // 3939' "$CONFIG_FILE")
+    local url="http://$host:$port"
+
+    # Check if server is running
+    if ! is_server_running; then
+        echo "Server is not running. Starting server..."
+        echo ""
+        cmd_start_server || return 1
+        echo ""
+        # Give server a moment to fully start
+        sleep 1
+    fi
+
+    echo "Opening browser at $url..."
+
+    # Detect OS and open browser
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        open "$url"
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # Linux
+        if command -v xdg-open > /dev/null; then
+            xdg-open "$url"
+        elif command -v gnome-open > /dev/null; then
+            gnome-open "$url"
+        else
+            echo "✗ Error: Could not detect browser opener"
+            echo "  Please open manually: $url"
+            return 1
+        fi
+    elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
+        # Windows (Git Bash / Cygwin)
+        start "$url"
+    else
+        echo "✗ Error: Unsupported OS: $OSTYPE"
+        echo "  Please open manually: $url"
+        return 1
+    fi
+
+    echo "✓ Browser opened"
 }
 
 # ============================================================================
@@ -503,15 +666,30 @@ interactive_mode() {
         echo ""
         echo "=== Initiative Manager ==="
         echo ""
+
+        # Show server status
+        if is_server_running; then
+            local host=$(jq -r '.server.host // "localhost"' "$CONFIG_FILE")
+            local port=$(jq -r '.server.port // 3939' "$CONFIG_FILE")
+            echo "Server: ✓ Running at http://$host:$port"
+        else
+            echo "Server: ✗ Not running"
+        fi
+        echo ""
+
         echo "1) Create new initiative"
         echo "2) Add note to initiative"
         echo "3) Log communication"
         echo "4) List all initiatives"
-        echo "5) Help"
-        echo "6) Exit"
+        echo "5) Start web server"
+        echo "6) Stop web server"
+        echo "7) Server status"
+        echo "8) Open UI in browser"
+        echo "9) Help"
+        echo "0) Exit"
         echo ""
 
-        read -p "Choose action (1-6): " choice
+        read -p "Choose action (0-9): " choice
 
         case "$choice" in
             1)
@@ -528,10 +706,34 @@ interactive_mode() {
                 read -p "Press Enter to continue..."
                 ;;
             5)
-                show_help
+                echo ""
+                cmd_start_server
+                echo ""
                 read -p "Press Enter to continue..."
                 ;;
             6)
+                echo ""
+                cmd_stop_server
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            7)
+                echo ""
+                cmd_server_status
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            8)
+                echo ""
+                cmd_open_ui
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            9)
+                show_help
+                read -p "Press Enter to continue..."
+                ;;
+            0)
                 echo ""
                 echo "Goodbye!"
                 echo ""
@@ -539,7 +741,7 @@ interactive_mode() {
                 ;;
             *)
                 echo ""
-                echo "✗ Invalid choice. Please select 1-6."
+                echo "✗ Invalid choice. Please select 0-9."
                 sleep 1
                 ;;
         esac
@@ -575,6 +777,18 @@ elif [ "$1" = "comm" ]; then
     shift
     cmd_comm "$@"
     exit 0
+elif [ "$1" = "start" ]; then
+    cmd_start_server
+    exit $?
+elif [ "$1" = "stop" ]; then
+    cmd_stop_server
+    exit $?
+elif [ "$1" = "status" ]; then
+    cmd_server_status
+    exit $?
+elif [ "$1" = "open-ui" ]; then
+    cmd_open_ui
+    exit $?
 else
     echo "✗ Error: Unknown subcommand '$1'"
     echo ""
