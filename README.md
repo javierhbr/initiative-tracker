@@ -61,18 +61,21 @@ El script unificado `manage.sh` soporta tanto modo interactivo como CLI con par�
 # 4) List all initiatives
 # 5) Start web server
 # 6) Stop web server
-# 7) Server status
-# 8) Open UI in browser
-# 9) Help
+# 7) Restart web server
+# 8) Server status
+# 9) Open UI in browser
+# h) Help
 # 0) Exit
 ```
 
 #### Modo CLI con Parámetros
+
 ```bash
 # Gestión del servidor
 ./scripts/manage.sh open-ui            # Iniciar servidor y abrir navegador
 ./scripts/manage.sh start              # Iniciar servidor web
 ./scripts/manage.sh stop               # Detener servidor web
+./scripts/manage.sh restart            # Reiniciar servidor web
 ./scripts/manage.sh status             # Ver estado del servidor
 
 # Crear iniciativa

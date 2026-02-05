@@ -168,6 +168,7 @@ USAGE:
     ./manage.sh list               List all initiatives
     ./manage.sh start              Start web server
     ./manage.sh stop               Stop web server
+    ./manage.sh restart            Restart web server
     ./manage.sh status             Check server status
     ./manage.sh open-ui            Open UI in browser
     ./manage.sh --help             Show this help
@@ -175,6 +176,7 @@ USAGE:
 EXAMPLES:
   ./manage.sh open-ui
   ./manage.sh start
+  ./manage.sh restart
   ./manage.sh new ABC-2026-01 "Fraud Detection Integration"
   ./manage.sh note ABC-2026-01 "Kickoff meeting scheduled"
   ./manage.sh comm ABC-2026-01 Slack https://slack/... "Risk approval"
@@ -314,6 +316,20 @@ cmd_server_status() {
         echo "✗ Server is not running"
         return 1
     fi
+}
+
+# Restart the server
+cmd_restart_server() {
+    echo "Restarting server..."
+    echo ""
+
+    if is_server_running; then
+        cmd_stop_server
+        echo ""
+        sleep 1
+    fi
+
+    cmd_start_server
 }
 
 # Open UI in browser
@@ -683,13 +699,14 @@ interactive_mode() {
         echo "4) List all initiatives"
         echo "5) Start web server"
         echo "6) Stop web server"
-        echo "7) Server status"
-        echo "8) Open UI in browser"
-        echo "9) Help"
+        echo "7) Restart web server"
+        echo "8) Server status"
+        echo "9) Open UI in browser"
+        echo "h) Help"
         echo "0) Exit"
         echo ""
 
-        read -p "Choose action (0-9): " choice
+        read -p "Choose action: " choice
 
         case "$choice" in
             1)
@@ -719,17 +736,23 @@ interactive_mode() {
                 ;;
             7)
                 echo ""
-                cmd_server_status
+                cmd_restart_server
                 echo ""
                 read -p "Press Enter to continue..."
                 ;;
             8)
                 echo ""
-                cmd_open_ui
+                cmd_server_status
                 echo ""
                 read -p "Press Enter to continue..."
                 ;;
             9)
+                echo ""
+                cmd_open_ui
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            h|H)
                 show_help
                 read -p "Press Enter to continue..."
                 ;;
@@ -741,7 +764,7 @@ interactive_mode() {
                 ;;
             *)
                 echo ""
-                echo "✗ Invalid choice. Please select 0-9."
+                echo "✗ Invalid choice."
                 sleep 1
                 ;;
         esac
@@ -782,6 +805,9 @@ elif [ "$1" = "start" ]; then
     exit $?
 elif [ "$1" = "stop" ]; then
     cmd_stop_server
+    exit $?
+elif [ "$1" = "restart" ]; then
+    cmd_restart_server
     exit $?
 elif [ "$1" = "status" ]; then
     cmd_server_status

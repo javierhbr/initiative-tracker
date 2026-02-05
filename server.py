@@ -129,11 +129,6 @@ class InitiativeHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
-        # Serve index.html at root
-        if path == '/' or path == '/index.html':
-            self.send_file('index.html', 'text/html')
-            return
-
         # API: Get directories configuration
         if path == '/api/directories':
             try:
@@ -184,7 +179,9 @@ class InitiativeHandler(BaseHTTPRequestHandler):
                     self.send_json({'error': str(e)}, 404)
                 return
 
-        self.send_error(404, 'Not found')
+        # Serve index.html for all other routes (SPA routing)
+        # This allows client-side routing to work for URLs like /FRAUD-2026-01
+        self.send_file('index.html', 'text/html')
 
     def do_POST(self):
         """Handle POST requests"""
