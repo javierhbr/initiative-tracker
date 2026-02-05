@@ -172,8 +172,9 @@ class InitiativeHandler(BaseHTTPRequestHandler):
             if len(parts) >= 4:
                 init_id = parts[3]
                 file_name = parts[4] if len(parts) > 4 else None
+                dir_name = parse_qs(parsed.query).get('directory', [None])[0]
                 try:
-                    data = self.get_initiative(init_id, file_name)
+                    data = self.get_initiative(init_id, file_name, dir_name)
                     self.send_json(data)
                 except Exception as e:
                     self.send_json({'error': str(e)}, 404)
@@ -189,6 +190,7 @@ class InitiativeHandler(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(content_length).decode())
 
         path = self.path
+        print(f"POST {path} - Body: {body}")  # Debug logging
 
         try:
             # Create new initiative
@@ -200,19 +202,26 @@ class InitiativeHandler(BaseHTTPRequestHandler):
             # Add note
             if '/note' in path:
                 init_id = path.split('/')[3]
+                print(f"Adding note to {init_id}: {body.get('note')}")  # Debug
                 result = self.add_note(init_id, body)
+                print(f"Note added successfully: {result}")  # Debug
                 self.send_json(result)
                 return
 
             # Add communication
             if '/comm' in path:
                 init_id = path.split('/')[3]
+                print(f"Adding comm to {init_id}")  # Debug
                 result = self.add_comm(init_id, body)
+                print(f"Comm added successfully: {result}")  # Debug
                 self.send_json(result)
                 return
 
             self.send_error(404, 'Not found')
         except Exception as e:
+            print(f"Error in POST: {e}")  # Debug
+            import traceback
+            traceback.print_exc()
             self.send_json({'error': str(e)}, 400)
 
     def list_initiatives(self, dir_name=None):

@@ -253,22 +253,32 @@ cmd_start_server() {
     local host=$(jq -r '.server.host // "localhost"' "$CONFIG_FILE")
     local port=$(jq -r '.server.port // 3939' "$CONFIG_FILE")
 
-    # Start server in background
+    # Create log file for errors
+    local log_file="$SCRIPT_DIR/../.server.log"
+
+    # Start server in background (with unbuffered output)
     cd "$SCRIPT_DIR/.."
-    nohup python3 "$SERVER_SCRIPT" > /dev/null 2>&1 &
+    nohup python3 -u "$SERVER_SCRIPT" > "$log_file" 2>&1 &
     local pid=$!
 
     # Save PID
     echo "$pid" > "$PID_FILE"
 
     # Wait a moment and verify it started
-    sleep 1
+    sleep 2
     if is_server_running; then
         echo "✓ Server started successfully (PID: $pid)"
         echo "  Server URL: http://$host:$port"
+        echo "  Log file: $log_file"
         echo "  Stop with: $0 stop"
     else
         echo "✗ Error: Server failed to start"
+        if [ -f "$log_file" ]; then
+            echo ""
+            echo "Error details:"
+            cat "$log_file"
+            echo ""
+        fi
         rm -f "$PID_FILE"
         return 1
     fi

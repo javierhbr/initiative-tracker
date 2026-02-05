@@ -378,6 +378,34 @@
             cursor: pointer;
         }
 
+        .initiative-file-path:active {
+            background: #e0f2fe;
+            color: var(--primary);
+        }
+
+        .copy-notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--success);
+            color: white;
+            padding: 0.75rem 1.25rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 10000;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+
+        .copy-notification.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
         .action-buttons {
             display: flex;
             gap: 0.5rem;
@@ -1190,7 +1218,6 @@
                         id="note-text"
                         name="note"
                         placeholder="Enter your note..."
-                        required
                     ></textarea>
                 </div>
                 <div class="form-actions">
@@ -1216,7 +1243,6 @@
                         id="comm-channel"
                         name="channel"
                         placeholder="e.g., Slack, Email, Meeting"
-                        required
                     />
                 </div>
                 <div class="form-group">
@@ -1226,18 +1252,15 @@
                         id="comm-link"
                         name="link"
                         placeholder="https://..."
-                        required
                     />
                 </div>
                 <div class="form-group">
                     <label for="comm-context">Context</label>
-                    <input
-                        type="text"
+                    <textarea
                         id="comm-context"
                         name="context"
                         placeholder="e.g., Kickoff with Risk team"
-                        required
-                    />
+                    ></textarea>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="app.closeModals()">Cancel</button>
@@ -1249,6 +1272,10 @@
 
     <!-- Marked.js for Markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- EasyMDE for Markdown editing -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
 
     <!-- Application Logic -->
     <script>
@@ -1262,6 +1289,8 @@
             searchDebounce: null,
             currentView: 'list', // 'list' or 'board'
             isRestoringState: false, // Flag to prevent pushing state during restoration
+            noteEditor: null, // EasyMDE instance for notes
+            commEditor: null, // EasyMDE instance for comms
 
             // Initialize app
             async init() {
@@ -1448,7 +1477,7 @@
                     <div class="content-header">
                         <div class="content-header-left">
                             <h2 style="font-size: 1.25rem; font-weight: 600;">${this.escapeHtml(this.currentInitiative.id)}</h2>
-                            <code class="initiative-file-path" title="${this.escapeHtml(filePath)}">${this.escapeHtml(filePath)}</code>
+                            <code class="initiative-file-path" title="Click to copy path: ${this.escapeHtml(filePath)}" onclick="app.copyToClipboard('${this.escapeHtml(filePath)}')">${this.escapeHtml(filePath)}</code>
                         </div>
                         <div class="action-buttons">
                             <button class="btn btn-sm btn-secondary" onclick="app.showAddNoteModal()">+ Add Note</button>
@@ -1660,43 +1689,41 @@
                 const initIdInput = document.getElementById('init-id');
                 const btnNew = document.querySelector('.btn-new');
 
-                // Return early if elements don't exist (e.g., when deep linking to initiative detail)
-                if (!initNameInput || !initIdInput || !btnNew) {
-                    return;
-                }
+                // Setup new initiative form if elements exist
+                if (initNameInput && initIdInput && btnNew) {
+                    let manuallyEdited = false;
 
-                let manuallyEdited = false;
+                    // Track if user manually edits the ID field
+                    initIdInput.addEventListener('input', () => {
+                        manuallyEdited = true;
+                    });
 
-                // Track if user manually edits the ID field
-                initIdInput.addEventListener('input', () => {
-                    manuallyEdited = true;
-                });
+                    // Auto-generate ID when name changes
+                    initNameInput.addEventListener('input', (e) => {
+                        if (!manuallyEdited) {
+                            const name = e.target.value;
+                            const year = new Date().getFullYear();
 
-                // Auto-generate ID when name changes
-                initNameInput.addEventListener('input', (e) => {
-                    if (!manuallyEdited) {
-                        const name = e.target.value;
-                        const year = new Date().getFullYear();
+                            // Convert name to UPPERCASE-KEBAB-CASE
+                            const prefix = name
+                                .trim()
+                                .split(/\s+/)
+                                .slice(0, 2) // Take first 2 words
+                                .join('-')
+                                .replaceAll(/[^a-zA-Z0-9-]/g, '') // Remove special chars
+                                .toUpperCase();
 
-                        // Convert name to UPPERCASE-KEBAB-CASE
-                        const prefix = name
-                            .trim()
-                            .split(/\s+/)
-                            .slice(0, 2) // Take first 2 words
-                            .join('-')
-                            .replaceAll(/[^a-zA-Z0-9-]/g, '') // Remove special chars
-                            .toUpperCase();
-
-                        if (prefix) {
-                            initIdInput.value = `${prefix}-${year}-01`;
+                            if (prefix) {
+                                initIdInput.value = `${prefix}-${year}-01`;
+                            }
                         }
-                    }
-                });
+                    });
 
-                // Reset manual edit flag when modal opens
-                btnNew.addEventListener('click', () => {
-                    manuallyEdited = false;
-                });
+                    // Reset manual edit flag when modal opens
+                    btnNew.addEventListener('click', () => {
+                        manuallyEdited = false;
+                    });
+                }
 
                 // New initiative form
                 const newInitiativeForm = document.getElementById('new-initiative-form');
@@ -1737,31 +1764,49 @@
                 if (addNoteForm) {
                     addNoteForm.addEventListener('submit', async (e) => {
                         e.preventDefault();
-                        if (!this.currentInitiative) return;
 
-                        const formData = new FormData(e.target);
+                        if (!this.currentInitiative) {
+                            console.error('No current initiative - cannot add note');
+                            alert('No initiative selected. Please select an initiative first.');
+                            return;
+                        }
+
+                        const noteValue = this.noteEditor ? this.noteEditor.value() : document.getElementById('note-text').value;
+
+                        if (!noteValue || noteValue.trim() === '') {
+                            console.error('Empty note value');
+                            alert('Please enter a note before submitting.');
+                            return;
+                        }
 
                         try {
-                            const response = await fetch(`/api/initiatives/${this.currentInitiative.id}/note`, {
+                            const url = `/api/initiatives/${this.currentInitiative.id}/note`;
+                            const payload = {
+                                note: noteValue,
+                                directory: this.currentInitiative.directory
+                            };
+
+                            const response = await fetch(url, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    note: formData.get('note'),
-                                    directory: this.currentInitiative.directory
-                                })
+                                body: JSON.stringify(payload)
                             });
 
                             if (response.ok) {
                                 this.closeModals();
                                 e.target.reset();
-                                // Reload current initiative
+                                // Reload current initiative (preserve directory)
+                                const currentDir = this.currentInitiative.directory || this.currentDirectory;
                                 await this.selectInitiative(this.currentInitiative.id);
+                                this.currentInitiative.directory = currentDir;
                                 this.switchTab('notes');
                             } else {
                                 const error = await response.json();
+                                console.error('Server error:', error);
                                 alert('Error: ' + error.error);
                             }
                         } catch (error) {
+                            console.error('Failed to add note - exception:', error);
                             alert('Failed to add note: ' + error.message);
                         }
                     });
@@ -1772,33 +1817,61 @@
                 if (addCommForm) {
                     addCommForm.addEventListener('submit', async (e) => {
                         e.preventDefault();
-                        if (!this.currentInitiative) return;
+                        if (!this.currentInitiative) {
+                            console.error('No current initiative');
+                            return;
+                        }
 
                         const formData = new FormData(e.target);
+                        const contextValue = this.commEditor ? this.commEditor.value() : document.getElementById('comm-context').value;
+                        const channelValue = formData.get('channel');
+                        const linkValue = formData.get('link');
+
+                        if (!channelValue || channelValue.trim() === '') {
+                            alert('Please enter a channel.');
+                            return;
+                        }
+
+                        if (!linkValue || linkValue.trim() === '') {
+                            alert('Please enter a link.');
+                            return;
+                        }
+
+                        if (!contextValue || contextValue.trim() === '') {
+                            alert('Please enter a context.');
+                            return;
+                        }
 
                         try {
-                            const response = await fetch(`/api/initiatives/${this.currentInitiative.id}/comm`, {
+                            const url = `/api/initiatives/${this.currentInitiative.id}/comm`;
+                            const payload = {
+                                channel: channelValue,
+                                link: linkValue,
+                                context: contextValue,
+                                directory: this.currentInitiative.directory
+                            };
+
+                            const response = await fetch(url, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    channel: formData.get('channel'),
-                                    link: formData.get('link'),
-                                    context: formData.get('context'),
-                                    directory: this.currentInitiative.directory
-                                })
+                                body: JSON.stringify(payload)
                             });
 
                             if (response.ok) {
                                 this.closeModals();
                                 e.target.reset();
-                                // Reload current initiative
+                                // Reload current initiative (preserve directory)
+                                const currentDir = this.currentInitiative.directory || this.currentDirectory;
                                 await this.selectInitiative(this.currentInitiative.id);
+                                this.currentInitiative.directory = currentDir;
                                 this.switchTab('comms');
                             } else {
                                 const error = await response.json();
+                                console.error('Server error:', error);
                                 alert('Error: ' + error.error);
                             }
                         } catch (error) {
+                            console.error('Failed to log communication:', error);
                             alert('Failed to log communication: ' + error.message);
                         }
                     });
@@ -1812,19 +1885,66 @@
             },
 
             showAddNoteModal() {
-                if (!this.currentInitiative) return;
-                document.getElementById('add-note-modal').classList.add('show');
-                setTimeout(() => document.getElementById('note-text').focus(), 100);
+                if (!this.currentInitiative) {
+                    console.error('No current initiative - cannot show add note modal');
+                    return;
+                }
+
+                const modal = document.getElementById('add-note-modal');
+                modal.classList.add('show');
+
+                // Initialize EasyMDE editor if not already created
+                if (!this.noteEditor) {
+                    const noteTextElement = document.getElementById('note-text');
+                    this.noteEditor = new EasyMDE({
+                        element: noteTextElement,
+                        placeholder: 'Enter your note... (Markdown supported)',
+                        spellChecker: false,
+                        status: false,
+                        toolbar: ['bold', 'italic', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', '|', 'link', 'code', '|', 'preview', 'guide'],
+                        minHeight: '200px'
+                    });
+                }
+
+                setTimeout(() => {
+                    this.noteEditor.codemirror.focus();
+                }, 100);
             },
 
             showAddCommModal() {
                 if (!this.currentInitiative) return;
                 document.getElementById('add-comm-modal').classList.add('show');
+
+                // Initialize EasyMDE editor for context field if not already created
+                if (!this.commEditor) {
+                    this.commEditor = new EasyMDE({
+                        element: document.getElementById('comm-context'),
+                        placeholder: 'e.g., Kickoff with Risk team (Markdown supported)',
+                        spellChecker: false,
+                        status: false,
+                        toolbar: ['bold', 'italic', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', '|', 'link', 'code', '|', 'preview', 'guide'],
+                        minHeight: '150px'
+                    });
+                }
+
                 setTimeout(() => document.getElementById('comm-channel').focus(), 100);
             },
 
             closeModals() {
-                document.querySelectorAll('.modal').forEach(m => m.classList.remove('show'));
+                const modals = document.querySelectorAll('.modal');
+                modals.forEach(m => {
+                    m.classList.remove('show');
+                });
+
+                // Clean up EasyMDE editors when closing modals
+                if (this.noteEditor) {
+                    this.noteEditor.toTextArea();
+                    this.noteEditor = null;
+                }
+                if (this.commEditor) {
+                    this.commEditor.toTextArea();
+                    this.commEditor = null;
+                }
             },
 
             // View switching
@@ -2186,6 +2306,61 @@
                 }
 
                 this.isRestoringState = false;
+            },
+
+            // Copy to clipboard
+            async copyToClipboard(text) {
+                try {
+                    await navigator.clipboard.writeText(text);
+                    this.showCopyNotification('Path copied to clipboard!');
+                } catch (err) {
+                    // Fallback for older browsers
+                    const textArea = document.createElement('textarea');
+                    textArea.value = text;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    try {
+                        document.execCommand('copy');
+                        this.showCopyNotification('Path copied to clipboard!');
+                    } catch (err) {
+                        this.showCopyNotification('Failed to copy path', true);
+                    }
+                    document.body.removeChild(textArea);
+                }
+            },
+
+            // Show copy notification
+            showCopyNotification(message, isError = false) {
+                // Remove existing notification if any
+                const existing = document.getElementById('copy-notification');
+                if (existing) {
+                    existing.remove();
+                }
+
+                // Create notification element
+                const notification = document.createElement('div');
+                notification.id = 'copy-notification';
+                notification.className = 'copy-notification';
+                notification.textContent = message;
+                if (isError) {
+                    notification.style.background = 'var(--danger)';
+                }
+                document.body.appendChild(notification);
+
+                // Show notification
+                setTimeout(() => {
+                    notification.classList.add('show');
+                }, 10);
+
+                // Hide and remove after 2 seconds
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 300);
+                }, 2000);
             },
 
             // Utility
