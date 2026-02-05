@@ -15,11 +15,40 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-INITIATIVES_DIR=$(jq -r '.directories.initiatives' "$CONFIG_FILE")
+INITIATIVES_DIR=$(jq -r '.directories[] | select(.default == true) | .path' "$CONFIG_FILE")
+
+# Show help
+if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+    echo "Create a new initiative with standard structure"
+    echo ""
+    echo "Usage: $0 <ID> <NAME>"
+    echo ""
+    echo "Arguments:"
+    echo "  ID    Unique initiative ID (e.g., ABC-2026-01)"
+    echo "  NAME  Initiative name (e.g., \"Fraud Real-time Signals Integration\")"
+    echo ""
+    echo "Example:"
+    echo "  $0 ABC-2026-01 \"Fraud Real-time Signals Integration\""
+    echo ""
+    echo "This will create the following structure:"
+    echo "  $INITIATIVES_DIR/<ID>/"
+    echo "    ├── README.md    (Initiative EPIC with overview, ownership, milestones)"
+    echo "    ├── notes.md     (Append-only notes log)"
+    echo "    ├── comms.md     (Communications tracking table)"
+    echo "    └── links.md     (Important links and references)"
+    echo ""
+    echo "Current Configuration:"
+    echo "  Config file: $CONFIG_FILE"
+    echo "  Initiatives directory: $INITIATIVES_DIR"
+    echo ""
+    exit 0
+fi
 
 if [ -z "$1" ] || [ -z "$2" ]; then
     echo "Usage: $0 <ID> <NAME>"
     echo "Example: $0 ABC-2026-01 \"Fraud Real-time Signals Integration\""
+    echo ""
+    echo "Run '$0 --help' for more information"
     exit 1
 fi
 

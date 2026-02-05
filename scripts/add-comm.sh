@@ -15,11 +15,35 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-INITIATIVES_DIR=$(jq -r '.directories.initiatives' "$CONFIG_FILE")
+INITIATIVES_DIR=$(jq -r '.directories[] | select(.default == true) | .path' "$CONFIG_FILE")
+
+# Show help
+if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+    echo "Add a communication entry to an initiative"
+    echo ""
+    echo "Usage: $0 <ID> <CHANNEL> <LINK> <CONTEXT>"
+    echo ""
+    echo "Arguments:"
+    echo "  ID        Initiative ID (e.g., ABC-2026-01)"
+    echo "  CHANNEL   Communication channel (e.g., Slack, Email, Teams)"
+    echo "  LINK      Link to the conversation or thread"
+    echo "  CONTEXT   Brief description of what was discussed"
+    echo ""
+    echo "Example:"
+    echo "  $0 ABC-2026-01 Slack https://slack/... \"Kickoff with Risk\""
+    echo ""
+    echo "Current Configuration:"
+    echo "  Config file: $CONFIG_FILE"
+    echo "  Initiatives directory: $INITIATIVES_DIR"
+    echo ""
+    exit 0
+fi
 
 if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ]; then
     echo "Usage: $0 <ID> <CHANNEL> <LINK> <CONTEXT>"
     echo "Example: $0 ABC-2026-01 Slack https://slack/... \"Kickoff with Risk\""
+    echo ""
+    echo "Run '$0 --help' for more information"
     exit 1
 fi
 
