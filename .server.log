@@ -1,0 +1,44 @@
+============================================================
+  Personal Initiative Tracker - Web UI
+============================================================
+
+✓ Server running at http://localhost:3939
+✓ Directories configured:
+  - Personal: ./initiatives (default)
+  - Personal-2: ./initiatives
+✓ Press Ctrl+C to stop
+
+[05/Feb/2026 17:23:06] "GET /FRAUD-2026-01?directory=Personal&tab=notes HTTP/1.1" 200 -
+[05/Feb/2026 17:23:06] "GET /api/directories HTTP/1.1" 200 -
+[05/Feb/2026 17:23:06] "GET /api/initiatives?directory=Personal HTTP/1.1" 200 -
+[05/Feb/2026 17:23:06] "GET /api/initiatives?directory=Personal HTTP/1.1" 200 -
+[05/Feb/2026 17:23:06] "GET /api/initiatives/FRAUD-2026-01?directory=Personal HTTP/1.1" 200 -
+[05/Feb/2026 17:23:06] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 200 -
+[05/Feb/2026 17:23:06] "GET /FRAUD-2026-01?directory=Personal&tab=notes HTTP/1.1" 200 -
+[05/Feb/2026 17:23:06] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 200 -
+[05/Feb/2026 17:23:06] "GET /api/directories HTTP/1.1" 200 -
+[05/Feb/2026 17:23:06] "GET /api/initiatives?directory=Personal HTTP/1.1" 200 -
+[05/Feb/2026 17:23:06] "GET /api/initiatives?directory=Personal HTTP/1.1" 200 -
+[05/Feb/2026 17:23:06] "GET /api/initiatives/FRAUD-2026-01?directory=Personal HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /FRAUD-2026-01?directory=Personal&tab=notes HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /api/directories HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /api/initiatives?directory=Personal HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /api/initiatives?directory=Personal HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /api/initiatives/FRAUD-2026-01?directory=Personal HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /FRAUD-2026-01?directory=Personal&tab=notes HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /api/directories HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /api/initiatives?directory=Personal HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /api/initiatives?directory=Personal HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /api/initiatives/FRAUD-2026-01?directory=Personal HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /FRAUD-2026-01?directory=Personal&tab=notes HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /api/directories HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /api/initiatives?directory=Personal HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /api/initiatives?directory=Personal HTTP/1.1" 200 -
+[05/Feb/2026 17:23:07] "GET /api/initiatives/FRAUD-2026-01?directory=Personal HTTP/1.1" 200 -
+POST /api/initiatives - Body: {'id': 'ASDASDASD-2026-01', 'name': 'asdasdasd', 'directory': 'Personal'}
+[05/Feb/2026 17:23:13] "POST /api/initiatives HTTP/1.1" 201 -
+[05/Feb/2026 17:23:13] "GET /api/initiatives?directory=Personal HTTP/1.1" 200 -
+[05/Feb/2026 17:23:13] "GET /api/initiatives/ASDASDASD-2026-01?directory=Personal HTTP/1.1" 200 -

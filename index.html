@@ -1291,6 +1291,7 @@
             isRestoringState: false, // Flag to prevent pushing state during restoration
             noteEditor: null, // EasyMDE instance for notes
             commEditor: null, // EasyMDE instance for comms
+            initIdManuallyEdited: false, // Track if initiative ID was manually edited
 
             // Initialize app
             async init() {
@@ -1687,20 +1688,17 @@
                 // Auto-generate Initiative ID from name
                 const initNameInput = document.getElementById('init-name');
                 const initIdInput = document.getElementById('init-id');
-                const btnNew = document.querySelector('.btn-new');
 
                 // Setup new initiative form if elements exist
-                if (initNameInput && initIdInput && btnNew) {
-                    let manuallyEdited = false;
-
+                if (initNameInput && initIdInput) {
                     // Track if user manually edits the ID field
                     initIdInput.addEventListener('input', () => {
-                        manuallyEdited = true;
+                        this.initIdManuallyEdited = true;
                     });
 
                     // Auto-generate ID when name changes
                     initNameInput.addEventListener('input', (e) => {
-                        if (!manuallyEdited) {
+                        if (!this.initIdManuallyEdited) {
                             const name = e.target.value;
                             const year = new Date().getFullYear();
 
@@ -1717,11 +1715,6 @@
                                 initIdInput.value = `${prefix}-${year}-01`;
                             }
                         }
-                    });
-
-                    // Reset manual edit flag when modal opens
-                    btnNew.addEventListener('click', () => {
-                        manuallyEdited = false;
                     });
                 }
 
@@ -1880,8 +1873,11 @@
 
             // Modal management
             showNewInitiativeModal() {
+                // Reset the manual edit flag when opening modal
+                this.initIdManuallyEdited = false;
+
                 document.getElementById('new-initiative-modal').classList.add('show');
-                setTimeout(() => document.getElementById('init-id').focus(), 100);
+                setTimeout(() => document.getElementById('init-name').focus(), 100);
             },
 
             showAddNoteModal() {
