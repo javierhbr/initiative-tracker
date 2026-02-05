@@ -1,0 +1,23 @@
+{
+  "server": {
+    "host": "localhost",
+    "port": 3939
+  },
+  "directories": [
+    {
+      "name": "Personal",
+      "path": "./initiatives",
+      "default": true
+    },
+    {
+      "name": "Work",
+      "path": "./work-initiatives",
+      "default": false
+    },
+    {
+      "name": "Team Projects",
+      "path": "/Users/yourname/Documents/team-initiatives",
+      "default": false
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "server": {
+    "host": "localhost",
+    "port": 3939
+  },
+  "directories": [
+    {
+      "name": "Personal",
+      "path": "./initiatives",
+      "default": true
+    }
+  ]
+}
