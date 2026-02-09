@@ -48,15 +48,6 @@ const Header: React.FC<HeaderProps> = ({
 
   return (
     <div className="flex flex-col sticky top-0 z-20 shadow-sm">
-      {/* Top Utility Bar (Desktop App Feel) */}
-      <div className="h-8 bg-white dark:bg-slate-900 border-b border-border-light dark:border-border-dark flex items-center justify-end px-4 gap-4 transition-colors duration-200">
-        <div className="flex items-center gap-3 border border-border-light dark:border-border-dark rounded px-2 py-0.5 bg-slate-50 dark:bg-slate-800">
-          <span className="material-icons text-slate-400 text-sm cursor-pointer hover:text-primary transition-colors">screenshot_monitor</span>
-          <span className="material-icons text-slate-400 text-sm cursor-pointer hover:text-primary transition-colors">sync</span>
-          <span className="material-icons text-slate-400 text-sm cursor-pointer hover:text-primary transition-colors">fullscreen</span>
-        </div>
-      </div>
-
       {/* Main Header */}
       <header className="h-14 border-b border-border-light dark:border-border-dark bg-white dark:bg-surface-dark flex items-center px-6 gap-10 transition-colors duration-200">
         {/* Left: App Logo & View Toggles */}

@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Initiative, InitiativeStatus } from '../types';
+import { version } from '../package.json';
 
 interface SidebarProps {
   initiatives: Initiative[];
@@ -74,6 +75,9 @@ const Sidebar: React.FC<SidebarProps> = ({ initiatives, onSelectInitiative, sele
           </div>
           <div className="text-sm font-medium text-slate-700 dark:text-slate-300">Settings</div>
         </button>
+        <div className="px-2 pt-2 text-[10px] text-slate-400 dark:text-slate-500">
+          v{version}
+        </div>
       </div>
     </aside>
   );
