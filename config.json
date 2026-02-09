@@ -3,6 +3,14 @@
     "host": "localhost",
     "port": 3939
   },
+  "initiativeTypes": [
+    "Discovery",
+    "PoC",
+    "Platform change",
+    "Regulatory",
+    "Growth",
+    "Infra"
+  ],
   "directories": [
     {
       "name": "Personal",
@@ -12,6 +20,11 @@
     {
       "name": "Personal-2",
       "path": "./initiatives",
+      "default": false
+    },
+    {
+      "name": "Ejemplo 2",
+      "path": "/Users/javierbenavides/others/ai-agents/agnostic-agent-loop/examples",
       "default": false
     }
   ]

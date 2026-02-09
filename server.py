@@ -5,12 +5,17 @@ Serves a single HTML file frontend and provides REST API for file operations
 """
 
 import json
+import mimetypes
 import os
 import re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
+
+
+# Static files directory (React build output)
+STATIC_DIR = Path(__file__).parent / 'src' / 'dist'
 
 
 def load_config():
@@ -23,6 +28,9 @@ def load_config():
             'host': 'localhost',
             'port': 3939
         },
+        'initiativeTypes': [
+            'Discovery', 'PoC', 'Platform change', 'Regulatory', 'Growth', 'Infra'
+        ],
         'directories': [
             {
                 'name': 'Personal',
@@ -39,6 +47,8 @@ def load_config():
                 # Merge with defaults
                 if 'server' not in config:
                     config['server'] = default_config['server']
+                if 'initiativeTypes' not in config:
+                    config['initiativeTypes'] = default_config['initiativeTypes']
                 if 'directories' not in config:
                     config['directories'] = default_config['directories']
                 return config
@@ -116,6 +126,31 @@ class InitiativeHandler(BaseHTTPRequestHandler):
         except FileNotFoundError:
             self.send_error(404, 'File not found')
 
+    def serve_static(self, path):
+        """Serve static files from src/dist/, fall back to index.html for SPA routing"""
+        # Try to serve the exact file requested
+        if path == '/':
+            file_path = STATIC_DIR / 'index.html'
+        else:
+            file_path = STATIC_DIR / path.lstrip('/')
+
+        # Prevent directory traversal
+        try:
+            file_path = file_path.resolve()
+            if not str(file_path).startswith(str(STATIC_DIR.resolve())):
+                self.send_error(403, 'Forbidden')
+                return
+        except Exception:
+            self.send_error(400, 'Bad request')
+            return
+
+        if file_path.is_file():
+            content_type, _ = mimetypes.guess_type(str(file_path))
+            self.send_file(str(file_path), content_type or 'application/octet-stream')
+        else:
+            # SPA fallback: serve index.html for client-side routing
+            self.send_file(str(STATIC_DIR / 'index.html'), 'text/html')
+
     def do_OPTIONS(self):
         """Handle CORS preflight requests"""
         self.send_response(200)
@@ -128,6 +163,23 @@ class InitiativeHandler(BaseHTTPRequestHandler):
         """Handle GET requests"""
         parsed = urlparse(self.path)
         path = parsed.path
+
+        # API: Get full config
+        if path == '/api/config':
+            try:
+                config_path = Path('config.json')
+                if config_path.exists():
+                    with open(config_path, 'r') as f:
+                        config = json.load(f)
+                else:
+                    config = {
+                        'server': {'host': 'localhost', 'port': 3939},
+                        'directories': [{'name': 'Personal', 'path': './initiatives', 'default': True}]
+                    }
+                self.send_json(config)
+            except Exception as e:
+                self.send_json({'error': str(e)}, 500)
+            return
 
         # API: Get directories configuration
         if path == '/api/directories':
@@ -180,19 +232,45 @@ class InitiativeHandler(BaseHTTPRequestHandler):
                     self.send_json({'error': str(e)}, 404)
                 return
 
-        # Serve index.html for all other routes (SPA routing)
-        # This allows client-side routing to work for URLs like /FRAUD-2026-01
-        self.send_file('index.html', 'text/html')
+        # Serve static files from React build (src/dist/)
+        self.serve_static(path)
 
     def do_POST(self):
         """Handle POST requests"""
         content_length = int(self.headers.get('Content-Length', 0))
         body = json.loads(self.rfile.read(content_length).decode())
 
-        path = self.path
+        parsed = urlparse(self.path)
+        path = parsed.path
         print(f"POST {path} - Body: {body}")  # Debug logging
 
         try:
+            # Update config
+            if path == '/api/config':
+                config_path = Path('config.json')
+                # Validate structure
+                if 'server' not in body or 'directories' not in body:
+                    raise ValueError('Config must have "server" and "directories" keys')
+                if not isinstance(body['directories'], list) or len(body['directories']) == 0:
+                    raise ValueError('At least one directory is required')
+                for d in body['directories']:
+                    if not d.get('name') or not d.get('path'):
+                        raise ValueError('Each directory must have "name" and "path"')
+                # Ensure exactly one default
+                has_default = any(d.get('default') for d in body['directories'])
+                if not has_default:
+                    body['directories'][0]['default'] = True
+                with open(config_path, 'w') as f:
+                    json.dump(body, f, indent=2)
+                    f.write('\n')
+                # Hot-reload directories in memory
+                self.set_directories(body['directories'])
+                global CONFIG
+                CONFIG = body
+                print(f"Config updated. Directories reloaded: {[d['name'] for d in body['directories']]}")
+                self.send_json({'success': True})
+                return
+
             # Create new initiative
             if path == '/api/initiatives':
                 result = self.create_initiative(body)
@@ -205,6 +283,16 @@ class InitiativeHandler(BaseHTTPRequestHandler):
                 print(f"Adding note to {init_id}: {body.get('note')}")  # Debug
                 result = self.add_note(init_id, body)
                 print(f"Note added successfully: {result}")  # Debug
+                self.send_json(result)
+                return
+
+            # Update file content
+            if '/file' in path:
+                init_id = path.split('/')[3]
+                file_name = path.split('/')[5] if len(path.split('/')) > 5 else None
+                print(f"Updating file {file_name} in {init_id}")  # Debug
+                result = self.update_initiative_file(init_id, file_name, body)
+                print(f"File updated successfully: {result}")  # Debug
                 self.send_json(result)
                 return
 
@@ -369,6 +457,7 @@ class InitiativeHandler(BaseHTTPRequestHandler):
         """Create new initiative (mirrors new-initiative.sh)"""
         init_id = data.get('id', '').strip()
         name = data.get('name', '').strip()
+        init_type = data.get('type', '').strip()
         dir_name = data.get('directory')
 
         if not init_id or not name:
@@ -392,7 +481,7 @@ class InitiativeHandler(BaseHTTPRequestHandler):
 
 ## Overview
 - **Initiative ID:** {init_id}
-- **Type:** <!-- Discovery | PoC | Platform change | Regulatory | Growth | Infra -->
+- **Type:** {init_type or '<!-- ' + ' | '.join(CONFIG.get('initiativeTypes', [])) + ' -->'}
 - **Status:** Idea
 - **Start date:**
 - **Target deadline:**
@@ -552,6 +641,41 @@ class InitiativeHandler(BaseHTTPRequestHandler):
 
         return {'success': True}
 
+    def update_initiative_file(self, init_id, file_name, data):
+        """Update specific file content"""
+        # Validate init_id
+        if '..' in init_id or '/' in init_id:
+            raise ValueError('Invalid initiative ID')
+
+        content = data.get('content')
+        dir_name = data.get('directory')
+
+        if content is None:
+            raise ValueError('Content is required')
+
+        if file_name not in ['readme', 'notes', 'comms', 'links']:
+            raise ValueError('Invalid file name')
+
+        initiatives_dir = self.get_initiatives_dir(dir_name)
+        
+        # Map file_name to actual filename
+        filename_map = {
+            'readme': 'README.md',
+            'notes': 'notes.md',
+            'comms': 'comms.md',
+            'links': 'links.md'
+        }
+        
+        actual_filename = filename_map.get(file_name)
+        file_path = initiatives_dir / init_id / actual_filename
+
+        if not file_path.exists():
+            raise FileNotFoundError(f'File {actual_filename} not found in initiative {init_id}')
+
+        file_path.write_text(content)
+
+        return {'success': True}
+
 
 def main():
     """Start the server"""
@@ -567,6 +691,11 @@ def main():
     print("  Personal Initiative Tracker - Web UI")
     print("=" * 60)
     print(f"\n✓ Server running at http://{host}:{port}")
+    if STATIC_DIR.exists():
+        print(f"✓ Serving React app from {STATIC_DIR}")
+    else:
+        print(f"⚠ React build not found at {STATIC_DIR}")
+        print(f"  Run: cd src && npm run build")
     print(f"✓ Directories configured:")
     for d in CONFIG['directories']:
         marker = " (default)" if d.get('default') else ""
