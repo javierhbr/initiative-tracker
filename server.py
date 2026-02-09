@@ -4,6 +4,18 @@ Super lite web server for Personal Initiative Tracker
 Serves a single HTML file frontend and provides REST API for file operations
 """
 
+import sys
+
+if sys.version_info < (3, 7):
+    print("Error: Python 3.7 or higher is required.")
+    print(f"  You are running Python {sys.version}")
+    print()
+    print("Install Python 3:")
+    print("  macOS:   brew install python3")
+    print("  Ubuntu:  sudo apt install python3")
+    print("  Windows: https://www.python.org/downloads/")
+    sys.exit(1)
+
 import json
 import mimetypes
 import os
