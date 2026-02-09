@@ -32,6 +32,12 @@ const App: React.FC = () => {
 
   const toggleDarkMode = () => setIsDarkMode(!isDarkMode);
 
+  const handleSetViewMode = (mode: ViewMode) => {
+    setViewMode(mode);
+    setSelectedInitiativeId(null);
+    setShowHelp(false);
+  };
+
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
@@ -59,21 +65,41 @@ const App: React.FC = () => {
     if (currentDirectory === null) return;
     setLoading(true);
     setError(null);
-    fetchInitiatives(currentDirectory)
-      .then(serverInits => {
-        setInitiatives(serverInits.map(toInitiative));
-        setLoading(false);
-      })
-      .catch(err => {
-        setError(err.message);
-        setLoading(false);
-      });
-  }, [currentDirectory]);
+
+    if (currentDirectory === '__all__') {
+      // Fetch from all directories in parallel
+      Promise.all(directories.map(d => fetchInitiatives(d.name)))
+        .then(results => {
+          const all = results.flatMap(inits => inits.map(toInitiative));
+          setInitiatives(all);
+          setLoading(false);
+        })
+        .catch(err => {
+          setError(err.message);
+          setLoading(false);
+        });
+    } else {
+      fetchInitiatives(currentDirectory)
+        .then(serverInits => {
+          setInitiatives(serverInits.map(toInitiative));
+          setLoading(false);
+        })
+        .catch(err => {
+          setError(err.message);
+          setLoading(false);
+        });
+    }
+  }, [currentDirectory, directories]);
 
   const reloadInitiatives = async () => {
     if (!currentDirectory) return;
-    const serverInits = await fetchInitiatives(currentDirectory);
-    setInitiatives(serverInits.map(toInitiative));
+    if (currentDirectory === '__all__') {
+      const results = await Promise.all(directories.map(d => fetchInitiatives(d.name)));
+      setInitiatives(results.flatMap(inits => inits.map(toInitiative)));
+    } else {
+      const serverInits = await fetchInitiatives(currentDirectory);
+      setInitiatives(serverInits.map(toInitiative));
+    }
   };
 
   // Server-side search with debounce (matches original index.html behavior)
@@ -99,7 +125,8 @@ const App: React.FC = () => {
 
     searchDebounceRef.current = setTimeout(async () => {
       try {
-        const results = await searchInitiatives(query, currentDirectory || undefined);
+        const dir = currentDirectory === '__all__' ? undefined : (currentDirectory || undefined);
+        const results = await searchInitiatives(query, dir);
         setIsSearching(false);
 
         const uniqueIds = new Set(results.map(r => r.initiative));
@@ -174,14 +201,17 @@ const App: React.FC = () => {
     // Optimistically update local state
     setInitiatives(prev => prev.map(i => i.id === updated.id ? updated : i));
 
+    // Resolve actual directory (needed when viewing "All Workspaces")
+    const dir = currentDirectory === '__all__' ? updated.directory : (currentDirectory || undefined);
+
     // Persist by updating the README status line
     try {
-      const detail = await fetchInitiativeDetail(updated.id, currentDirectory || undefined);
+      const detail = await fetchInitiativeDetail(updated.id, dir);
       const updatedReadme = detail.readme.replace(
         /\*\*Status:\*\* .+$/m,
         `**Status:** ${updated.status}`
       );
-      await updateFile(updated.id, 'readme', updatedReadme, currentDirectory || undefined);
+      await updateFile(updated.id, 'readme', updatedReadme, dir);
     } catch (err: any) {
       setError(`Failed to persist status: ${err.message}`);
       await reloadInitiatives();
@@ -192,7 +222,7 @@ const App: React.FC = () => {
     <div className="flex flex-col h-screen overflow-hidden bg-background-light dark:bg-background-dark transition-colors duration-200">
       <Header
         viewMode={viewMode}
-        setViewMode={setViewMode}
+        setViewMode={handleSetViewMode}
         toggleDarkMode={toggleDarkMode}
         isDarkMode={isDarkMode}
         searchQuery={searchQuery}
@@ -200,6 +230,7 @@ const App: React.FC = () => {
         isSearching={isSearching}
         searchResultsInfo={searchResultsInfo}
         onNewInitiative={() => setIsAddingNew(true)}
+        onGoHome={() => { setSelectedInitiativeId(null); setShowHelp(false); }}
         directories={directories}
         currentDirectory={currentDirectory}
         onDirectoryChange={setCurrentDirectory}
@@ -236,7 +267,9 @@ const App: React.FC = () => {
           ) : selectedInitiativeId ? (
             <InitiativeDetail
               initiativeId={selectedInitiativeId}
-              directory={currentDirectory}
+              directory={currentDirectory === '__all__'
+                ? initiatives.find(i => i.id === selectedInitiativeId)?.directory || null
+                : currentDirectory}
               onBack={() => setSelectedInitiativeId(null)}
             />
           ) : (
@@ -244,12 +277,14 @@ const App: React.FC = () => {
               <InitiativeList
                 initiatives={filteredInitiatives}
                 onSelect={(init) => setSelectedInitiativeId(init.id)}
+                showDirectoryBadge={currentDirectory === '__all__'}
               />
             ) : (
               <InitiativeBoard
                 initiatives={filteredInitiatives}
                 onSelect={(init) => setSelectedInitiativeId(init.id)}
                 onUpdateInitiative={handleUpdateInitiativeStatus}
+                showDirectoryBadge={currentDirectory === '__all__'}
               />
             )
           )}

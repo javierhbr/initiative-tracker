@@ -423,15 +423,9 @@ class InitiativeHandler(BaseHTTPRequestHandler):
             'links': (init_path / 'links.md').read_text() if (init_path / 'links.md').exists() else ''
         }
 
-    def search(self, query, dir_name=None):
-        """Full-text search across all initiatives"""
-        if not query:
-            return []
-
+    def _search_directory(self, initiatives_dir, query_lower):
+        """Search a single initiatives directory"""
         results = []
-        query_lower = query.lower()
-        initiatives_dir = self.get_initiatives_dir(dir_name)
-
         if not initiatives_dir.exists():
             return results
 
@@ -443,16 +437,15 @@ class InitiativeHandler(BaseHTTPRequestHandler):
                 try:
                     content = md_file.read_text()
                     if query_lower in content.lower():
-                        # Extract context around matches
                         lines = content.split('\n')
                         matches = []
                         for i, line in enumerate(lines, 1):
                             if query_lower in line.lower():
                                 matches.append({
                                     'line_num': i,
-                                    'text': line[:100]  # Limit line length
+                                    'text': line[:100]
                                 })
-                                if len(matches) >= 3:  # Limit to 3 matches per file
+                                if len(matches) >= 3:
                                     break
 
                         results.append({
@@ -463,6 +456,28 @@ class InitiativeHandler(BaseHTTPRequestHandler):
                 except Exception:
                     continue
 
+        return results
+
+    def search(self, query, dir_name=None):
+        """Full-text search across all initiatives"""
+        if not query:
+            return []
+
+        query_lower = query.lower()
+
+        if dir_name:
+            initiatives_dir = self.get_initiatives_dir(dir_name)
+            return self._search_directory(initiatives_dir, query_lower)
+
+        # No directory specified: search across all directories
+        results = []
+        seen = set()
+        for d in self.DIRECTORIES:
+            for r in self._search_directory(d['path'], query_lower):
+                key = (r['initiative'], r['file'])
+                if key not in seen:
+                    seen.add(key)
+                    results.append(r)
         return results
 
     def create_initiative(self, data):

@@ -31,6 +31,9 @@ const InitiativeDetail: React.FC<InitiativeDetailProps> = ({ initiativeId, direc
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [noteContent, setNoteContent] = useState('');
 
+  // Preview mode during edit
+  const [showPreview, setShowPreview] = useState(false);
+
   // Add comm modal
   const [isAddingComm, setIsAddingComm] = useState(false);
 
@@ -54,6 +57,7 @@ const InitiativeDetail: React.FC<InitiativeDetailProps> = ({ initiativeId, direc
   const handleStartEdit = () => {
     if (!detail) return;
     setEditContent(detail[activeTab]);
+    setShowPreview(false);
     setIsEditing(true);
   };
 
@@ -201,11 +205,51 @@ const InitiativeDetail: React.FC<InitiativeDetailProps> = ({ initiativeId, direc
 
           {isEditing ? (
             <div className="p-6 animate-in fade-in duration-200">
-              <textarea
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                className="w-full h-[500px] bg-slate-50 dark:bg-slate-800 border border-border-light dark:border-border-dark rounded-lg p-4 font-mono text-sm text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-primary focus:border-primary outline-none resize-none"
-              />
+              {/* Edit / Preview toggle */}
+              <div className="flex items-center gap-1 mb-3">
+                <div className="bg-slate-100 dark:bg-slate-800 p-0.5 rounded border border-border-light dark:border-border-dark inline-flex">
+                  <button
+                    onClick={() => setShowPreview(false)}
+                    className={`px-3 py-1 text-xs font-semibold rounded transition-all flex items-center gap-1 ${
+                      !showPreview
+                        ? 'text-primary bg-white dark:bg-slate-700 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    <span className="material-icons text-sm">edit</span>
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => setShowPreview(true)}
+                    className={`px-3 py-1 text-xs font-semibold rounded transition-all flex items-center gap-1 ${
+                      showPreview
+                        ? 'text-primary bg-white dark:bg-slate-700 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    <span className="material-icons text-sm">visibility</span>
+                    Preview
+                  </button>
+                </div>
+              </div>
+
+              {showPreview ? (
+                <div className="w-full h-[500px] overflow-y-auto bg-slate-50 dark:bg-slate-800 border border-border-light dark:border-border-dark rounded-lg p-4">
+                  <div
+                    className="prose prose-sm dark:prose-invert max-w-none"
+                    dangerouslySetInnerHTML={{
+                      __html: marked.parse(editContent || '*No content*') as string,
+                    }}
+                  />
+                </div>
+              ) : (
+                <textarea
+                  autoFocus
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  className="w-full h-[500px] bg-slate-50 dark:bg-slate-800 border border-border-light dark:border-border-dark rounded-lg p-4 font-mono text-sm text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-primary focus:border-primary outline-none resize-none"
+                />
+              )}
               <div className="flex justify-end gap-3 mt-4">
                 <button
                   onClick={() => setIsEditing(false)}

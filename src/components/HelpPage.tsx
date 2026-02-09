@@ -5,14 +5,13 @@ interface HelpPageProps {
   onBack: () => void;
 }
 
-type SectionId = 'getting-started' | 'config' | 'web-ui' | 'cli' | 'api' | 'file-structure' | 'types-statuses' | 'claude' | 'shortcuts';
+type SectionId = 'getting-started' | 'config' | 'web-ui' | 'cli' | 'file-structure' | 'types-statuses' | 'claude' | 'shortcuts';
 
 const sections: { id: SectionId; icon: string; label: string }[] = [
   { id: 'getting-started', icon: 'rocket_launch', label: 'Getting Started' },
   { id: 'config', icon: 'settings', label: 'Configuration' },
   { id: 'web-ui', icon: 'web', label: 'Web UI' },
   { id: 'cli', icon: 'terminal', label: 'CLI Scripts' },
-  { id: 'api', icon: 'api', label: 'REST API' },
   { id: 'file-structure', icon: 'folder_open', label: 'File Structure' },
   { id: 'types-statuses', icon: 'label', label: 'Types & Statuses' },
   { id: 'claude', icon: 'smart_toy', label: 'Claude Integration' },
@@ -280,65 +279,6 @@ const HelpPage: React.FC<HelpPageProps> = ({ onBack }) => {
 
             <SubHeading>Log Monitoring</SubHeading>
             <CodeBlock>{`./watch-logs.sh    # Tail server logs in real-time`}</CodeBlock>
-          </>
-        )}
-
-        {activeSection === 'api' && (
-          <>
-            <SectionHeading icon="api">REST API</SectionHeading>
-            <P>The Python server exposes a REST API on the configured port. All endpoints return JSON.</P>
-
-            <SubHeading>GET Endpoints</SubHeading>
-            <div className="overflow-x-auto my-3">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="border-b-2 border-border-light dark:border-border-dark">
-                    <th className="text-left py-2 px-3 font-semibold text-slate-700 dark:text-slate-300">Endpoint</th>
-                    <th className="text-left py-2 px-3 font-semibold text-slate-700 dark:text-slate-300">Description</th>
-                  </tr>
-                </thead>
-                <tbody className="text-slate-600 dark:text-slate-400 font-mono text-xs">
-                  <tr className="border-b border-border-light dark:border-border-dark"><td className="py-2 px-3">GET /api/config</td><td className="py-2 px-3 font-sans text-sm">Full configuration</td></tr>
-                  <tr className="border-b border-border-light dark:border-border-dark"><td className="py-2 px-3">GET /api/directories</td><td className="py-2 px-3 font-sans text-sm">List configured directories</td></tr>
-                  <tr className="border-b border-border-light dark:border-border-dark"><td className="py-2 px-3">GET /api/initiatives?directory=...</td><td className="py-2 px-3 font-sans text-sm">List all initiatives</td></tr>
-                  <tr className="border-b border-border-light dark:border-border-dark"><td className="py-2 px-3">GET /api/initiatives/:id?directory=...</td><td className="py-2 px-3 font-sans text-sm">Get initiative detail (all 4 files)</td></tr>
-                  <tr><td className="py-2 px-3">GET /api/search?q=...&directory=...</td><td className="py-2 px-3 font-sans text-sm">Full-text search</td></tr>
-                </tbody>
-              </table>
-            </div>
-
-            <SubHeading>POST Endpoints</SubHeading>
-            <div className="overflow-x-auto my-3">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="border-b-2 border-border-light dark:border-border-dark">
-                    <th className="text-left py-2 px-3 font-semibold text-slate-700 dark:text-slate-300">Endpoint</th>
-                    <th className="text-left py-2 px-3 font-semibold text-slate-700 dark:text-slate-300">Body</th>
-                  </tr>
-                </thead>
-                <tbody className="text-slate-600 dark:text-slate-400 font-mono text-xs">
-                  <tr className="border-b border-border-light dark:border-border-dark"><td className="py-2 px-3">POST /api/config</td><td className="py-2 px-3 font-sans text-sm">Full config object</td></tr>
-                  <tr className="border-b border-border-light dark:border-border-dark"><td className="py-2 px-3">POST /api/initiatives</td><td className="py-2 px-3 font-sans text-sm">{"{ id, name, type?, directory? }"}</td></tr>
-                  <tr className="border-b border-border-light dark:border-border-dark"><td className="py-2 px-3">POST /api/initiatives/:id/note</td><td className="py-2 px-3 font-sans text-sm">{"{ note, directory? }"}</td></tr>
-                  <tr className="border-b border-border-light dark:border-border-dark"><td className="py-2 px-3">POST /api/initiatives/:id/comm</td><td className="py-2 px-3 font-sans text-sm">{"{ channel, link, context, directory? }"}</td></tr>
-                  <tr><td className="py-2 px-3">POST /api/initiatives/:id/file/:name</td><td className="py-2 px-3 font-sans text-sm">{"{ content, directory? }"}</td></tr>
-                </tbody>
-              </table>
-            </div>
-
-            <SubHeading>Examples</SubHeading>
-            <CodeBlock title="Create an initiative">{`curl -X POST http://localhost:3939/api/initiatives \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "id": "TEST-2026-01",
-    "name": "Test Initiative",
-    "type": "Discovery",
-    "directory": "Personal"
-  }'`}</CodeBlock>
-            <CodeBlock title="Search initiatives">{`curl "http://localhost:3939/api/search?q=regulatory" | jq`}</CodeBlock>
-            <CodeBlock title="Add a note">{`curl -X POST http://localhost:3939/api/initiatives/TEST-2026-01/note \\
-  -H "Content-Type: application/json" \\
-  -d '{"note": "Risk team approved the proposal"}'`}</CodeBlock>
           </>
         )}
 

@@ -5,9 +5,10 @@ import { Initiative, InitiativeStatus } from '../types';
 interface InitiativeListProps {
   initiatives: Initiative[];
   onSelect: (init: Initiative) => void;
+  showDirectoryBadge?: boolean;
 }
 
-const InitiativeList: React.FC<InitiativeListProps> = ({ initiatives, onSelect }) => {
+const InitiativeList: React.FC<InitiativeListProps> = ({ initiatives, onSelect, showDirectoryBadge }) => {
   return (
     <div className="max-w-6xl">
       <div className="flex items-center justify-between mb-6">
@@ -39,6 +40,12 @@ const InitiativeList: React.FC<InitiativeListProps> = ({ initiatives, onSelect }
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300">
                       {init.type}
                     </span>
+                    {init.directory && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                        <span className="material-icons text-xs">folder</span>
+                        {init.directory}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

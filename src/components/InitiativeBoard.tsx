@@ -6,9 +6,10 @@ interface InitiativeBoardProps {
   initiatives: Initiative[];
   onSelect: (init: Initiative) => void;
   onUpdateInitiative: (init: Initiative) => void;
+  showDirectoryBadge?: boolean;
 }
 
-const InitiativeBoard: React.FC<InitiativeBoardProps> = ({ initiatives, onSelect, onUpdateInitiative }) => {
+const InitiativeBoard: React.FC<InitiativeBoardProps> = ({ initiatives, onSelect, onUpdateInitiative, showDirectoryBadge }) => {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [activeColumn, setActiveColumn] = useState<string | null>(null);
 
@@ -104,10 +105,16 @@ const InitiativeBoard: React.FC<InitiativeBoardProps> = ({ initiatives, onSelect
                     {init.title}
                   </h4>
                   
-                  <div className="mb-3">
+                  <div className="flex flex-wrap gap-1.5 mb-3">
                     <span className="inline-block bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded text-[10px] font-medium border border-slate-200 dark:border-slate-600">
                       {init.type.split(' / ')[0]}
                     </span>
+                    {init.directory && (
+                      <span className="inline-flex items-center gap-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 px-2 py-0.5 rounded text-[10px] font-medium border border-purple-200 dark:border-purple-700">
+                        <span className="material-icons" style={{ fontSize: '10px' }}>folder</span>
+                        {init.directory}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex flex-col gap-1.5 border-t border-slate-100 dark:border-slate-700/50 pt-3">
