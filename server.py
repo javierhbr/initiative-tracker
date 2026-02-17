@@ -290,7 +290,7 @@ class InitiativeHandler(BaseHTTPRequestHandler):
                 return
 
             # Add note
-            if '/note' in path:
+            if path.endswith('/note'):
                 init_id = path.split('/')[3]
                 print(f"Adding note to {init_id}: {body.get('note')}")  # Debug
                 result = self.add_note(init_id, body)
@@ -299,7 +299,7 @@ class InitiativeHandler(BaseHTTPRequestHandler):
                 return
 
             # Update file content
-            if '/file' in path:
+            if '/file/' in path:
                 init_id = path.split('/')[3]
                 file_name = path.split('/')[5] if len(path.split('/')) > 5 else None
                 print(f"Updating file {file_name} in {init_id}")  # Debug
@@ -309,7 +309,7 @@ class InitiativeHandler(BaseHTTPRequestHandler):
                 return
 
             # Add communication
-            if '/comm' in path:
+            if path.endswith('/comm'):
                 init_id = path.split('/')[3]
                 print(f"Adding comm to {init_id}")  # Debug
                 result = self.add_comm(init_id, body)
