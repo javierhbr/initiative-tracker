@@ -1,2 +1,7 @@
 __pycache__/
 .server.pid
+
+dist/
+.DS_Store
+**/node_modules/
+.playwright-mcp/

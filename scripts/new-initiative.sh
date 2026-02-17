@@ -19,6 +19,9 @@ INITIATIVES_DIR=$(jq -r '.directories[] | select(.default == true) | .path' "$CO
 # Expand tilde to home directory
 INITIATIVES_DIR="${INITIATIVES_DIR/#\~/$HOME}"
 
+# Load initiative types from config
+INITIATIVE_TYPES=$(jq -r '.initiativeTypes[]' "$CONFIG_FILE")
+
 # Show help
 if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
     echo "Create a new initiative with standard structure"
@@ -39,6 +42,9 @@ if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
     echo "    ├── comms.md     (Communications tracking table)"
     echo "    └── links.md     (Important links and references)"
     echo ""
+    echo "Available types (from config.json):"
+    echo "$INITIATIVE_TYPES" | while IFS= read -r t; do echo "  - $t"; done
+    echo ""
     echo "Current Configuration:"
     echo "  Config file: $CONFIG_FILE"
     echo "  Initiatives directory: $INITIATIVES_DIR"
@@ -56,6 +62,27 @@ fi
 
 ID=$1
 NAME=$2
+
+# Select initiative type
+echo "Select initiative type:"
+i=1
+while IFS= read -r type; do
+    echo "  $i) $type"
+    i=$((i + 1))
+done <<< "$INITIATIVE_TYPES"
+
+TYPE_COUNT=$((i - 1))
+while true; do
+    read -rp "Enter number (1-$TYPE_COUNT): " TYPE_NUM
+    if [[ "$TYPE_NUM" =~ ^[0-9]+$ ]] && [ "$TYPE_NUM" -ge 1 ] && [ "$TYPE_NUM" -le "$TYPE_COUNT" ]; then
+        TYPE=$(echo "$INITIATIVE_TYPES" | sed -n "${TYPE_NUM}p")
+        break
+    fi
+    echo "Invalid selection. Please enter a number between 1 and $TYPE_COUNT."
+done
+echo "Selected type: $TYPE"
+echo ""
+
 DIR="$INITIATIVES_DIR/$ID"
 
 if [ -d "$DIR" ]; then
@@ -71,7 +98,7 @@ cat <<'EOF' > "$DIR/README.md"
 
 ## Overview
 - **Initiative ID:** __ID__
-- **Type:** <!-- Discovery | PoC | Platform change | Regulatory | Growth | Infra -->
+- **Type:** __TYPE__
 - **Status:** Idea
 - **Start date:**
 - **Target deadline:**
@@ -135,6 +162,7 @@ EOF
 # Replace placeholders
 sed -i '' "s/__NAME__/$NAME/g" "$DIR/README.md"
 sed -i '' "s/__ID__/$ID/g" "$DIR/README.md"
+sed -i '' "s/__TYPE__/$TYPE/g" "$DIR/README.md"
 
 # Create notes.md
 cat <<EOF > "$DIR/notes.md"
