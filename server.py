@@ -579,8 +579,16 @@ class InitiativeHandler(BaseHTTPRequestHandler):
                     try:
                         init_id = item_id.split('::')[0]
                         item_slug = item_id.split('::')[1] if '::' in item_id else item_id
+                        # Validate both parts to prevent path traversal
+                        if '..' in init_id or '/' in init_id:
+                            raise ValueError('Invalid initiative ID in itemId')
+                        if re.search(r'[^a-z0-9\-]', item_slug):
+                            raise ValueError('Invalid slug in itemId')
                         dir_path = self.get_initiatives_dir(None)
-                        notes_file = dir_path / init_id / 'notes.md'
+                        # Resolve and verify path stays within dir_path
+                        notes_file = (dir_path / init_id / 'notes.md').resolve()
+                        if not str(notes_file).startswith(str(dir_path.resolve())):
+                            raise ValueError('Path traversal detected')
                         if notes_file.exists():
                             today = datetime.now().strftime('%Y-%m-%d')
                             content = notes_file.read_text()

@@ -72,12 +72,20 @@ show_dialog() {
     local title="Initiative Reminder"
     local message
     if [ "$overdue" = "true" ]; then
-        message="⚠️ OVERDUE — ${initiative_id}\n\n${item_text}"
+        message="⚠️ OVERDUE — ${initiative_id}
+
+${item_text}"
     else
-        message="📋 ${initiative_id}\n\n${item_text}"
+        message="📋 ${initiative_id}
+
+${item_text}"
     fi
+    # Escape backslashes and double-quotes before embedding in AppleScript string
+    local escaped_message escaped_title
+    escaped_message=$(printf '%s' "$message" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    escaped_title=$(printf '%s' "$title" | sed 's/\\/\\\\/g; s/"/\\"/g')
     # Returns button name chosen (Done / Snooze / Dismiss)
-    osascript -e "button returned of (display dialog \"${message}\" with title \"${title}\" buttons {\"Dismiss\", \"Snooze\", \"Done\"} default button \"Done\")" 2>/dev/null || echo "Dismiss"
+    osascript -e "button returned of (display dialog \"${escaped_message}\" with title \"${escaped_title}\" buttons {\"Dismiss\", \"Snooze\", \"Done\"} default button \"Done\")" 2>/dev/null || echo "Dismiss"
 }
 
 run_once() {

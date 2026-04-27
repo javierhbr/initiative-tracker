@@ -19,8 +19,8 @@ const DailyReminderModal: React.FC<DailyReminderModalProps> = ({ data, onClose, 
       await postReminderAction(action, itemId);
       const updated = await fetchRemindersDaily();
       onRefresh(updated);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setActing(null);
     }
