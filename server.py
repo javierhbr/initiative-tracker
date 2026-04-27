@@ -337,7 +337,7 @@ class InitiativeHandler(BaseHTTPRequestHandler):
                     'overdue': overdue,
                 })
 
-        return result
+        return sorted(result, key=lambda x: (not x['overdue'], x['initiativeId']))
 
     def serve_static(self, path):
         """Serve static files from src/dist/, fall back to index.html for SPA routing"""

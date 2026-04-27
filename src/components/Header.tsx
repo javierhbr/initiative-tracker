@@ -138,7 +138,7 @@ const Header: React.FC<HeaderProps> = ({
                 className="relative w-9 h-9 flex items-center justify-center rounded-full border-2 border-border-light dark:border-border-dark text-slate-500 hover:border-primary hover:text-primary transition-all"
                 title={`${reminderCount} pending follow-up${reminderCount !== 1 ? 's' : ''}`}
               >
-                <span className="material-icons text-xl">notifications</span>
+                <span className="material-icons text-xl">notifications_active</span>
                 {reminderCount > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
                     {reminderCount > 99 ? '99+' : reminderCount}

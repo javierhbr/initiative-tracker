@@ -110,7 +110,7 @@ const DailyReminderModal: React.FC<DailyReminderModalProps> = ({ data, onClose, 
           {data.snoozeActive && data.snoozedUntil && (
             <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
               <span className="material-icons text-sm">snooze</span>
-              Snoozed until {new Date(data.snoozedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              Snoozed until {new Date(data.snoozedUntil).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
             </p>
           )}
           {!data.snoozeActive && <div />}
