@@ -8,7 +8,7 @@ import InitiativeBoard from './components/InitiativeBoard';
 import SettingsModal from './components/SettingsModal';
 import HelpPage from './components/HelpPage';
 import DailyReminderModal from './components/DailyReminderModal';
-import { Initiative, ViewMode, ServerDirectory, SearchResult, toInitiative, ReminderCheckResponse } from './types';
+import { Initiative, ViewMode, ServerDirectory, SearchResult, TabName, toInitiative, ReminderCheckResponse } from './types';
 import { fetchConfig, fetchDirectories, fetchInitiatives, searchInitiatives, createInitiative, updateFile, fetchInitiativeDetail, fetchRemindersDaily } from './api';
 
 const App: React.FC = () => {
@@ -30,6 +30,7 @@ const App: React.FC = () => {
   const [searchMatchedIds, setSearchMatchedIds] = useState<Set<string> | null>(null);
   const [reminderData, setReminderData] = useState<ReminderCheckResponse | null>(null);
   const [showReminderModal, setShowReminderModal] = useState(false);
+  const [deepLinkTab, setDeepLinkTab] = useState<TabName | undefined>(undefined);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>();
   const searchInfoTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -54,8 +55,27 @@ const App: React.FC = () => {
     fetchDirectories()
       .then(dirs => {
         setDirectories(dirs);
+
+        const params = new URLSearchParams(window.location.search);
+        const requestedDirectory = params.get('directory');
+        const matchedDirectory = requestedDirectory
+          ? dirs.find(d => d.name === requestedDirectory)
+          : undefined;
+
         const defaultDir = dirs.find(d => d.default);
-        setCurrentDirectory(defaultDir?.name || dirs[0]?.name || null);
+        setCurrentDirectory(matchedDirectory?.name || defaultDir?.name || dirs[0]?.name || null);
+
+        const requestedTab = params.get('tab');
+        const validTabs: TabName[] = ['readme', 'notes', 'comms', 'links'];
+        if (requestedTab && validTabs.includes(requestedTab as TabName)) {
+          setDeepLinkTab(requestedTab as TabName);
+        }
+
+        const pathInitId = decodeURIComponent(window.location.pathname).replace(/^\//, '').trim();
+        if (pathInitId) {
+          setShowHelp(false);
+          setSelectedInitiativeId(pathInitId);
+        }
       })
       .catch(err => setError(err.message));
     fetchConfig()
@@ -294,6 +314,7 @@ const App: React.FC = () => {
               directory={currentDirectory === '__all__'
                 ? initiatives.find(i => i.id === selectedInitiativeId)?.directory || null
                 : currentDirectory}
+              initialTab={deepLinkTab}
               onBack={() => setSelectedInitiativeId(null)}
             />
           ) : (

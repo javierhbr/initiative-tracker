@@ -22,7 +22,7 @@ import os
 import re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, quote
 from datetime import datetime
 
 
@@ -114,6 +114,32 @@ class InitiativeHandler(BaseHTTPRequestHandler):
 
         default_dir = self.get_default_directory()
         return default_dir['path'] if default_dir else Path('./initiatives')
+
+    def find_directory_name_for_initiative(self, init_id):
+        """Find the configured directory name that contains the initiative."""
+        for d in self.DIRECTORIES:
+            if (d['path'] / init_id).exists():
+                return d['name']
+        default_dir = self.get_default_directory()
+        return default_dir['name'] if default_dir else None
+
+    def build_dashboard_url(self, init_id, dir_name=None, tab='notes'):
+        """Build a URL that opens the initiative in the web dashboard."""
+        host = CONFIG.get('server', {}).get('host', 'localhost')
+        port = CONFIG.get('server', {}).get('port', 3939)
+        # 0.0.0.0 is not navigable in browsers; use localhost for links.
+        if host == '0.0.0.0':
+            host = 'localhost'
+
+        resolved_dir_name = dir_name or self.find_directory_name_for_initiative(init_id)
+        params = []
+        if resolved_dir_name:
+            params.append(f"directory={quote(str(resolved_dir_name))}")
+        if tab:
+            params.append(f"tab={quote(str(tab))}")
+        query = f"?{'&'.join(params)}" if params else ''
+
+        return f"http://{host}:{port}/{quote(str(init_id))}{query}"
 
     def log_message(self, format, *args):
         """Override to provide cleaner logging"""
@@ -334,6 +360,8 @@ class InitiativeHandler(BaseHTTPRequestHandler):
                     'text': item['text'],
                     'initiativeId': init_id,
                     'initiativeTitle': init_title,
+                    'directory': init_info.get('directory', ''),
+                    'dashboardUrl': self.build_dashboard_url(init_id, init_info.get('directory'), tab='notes'),
                     'overdue': overdue,
                 })
 
@@ -584,7 +612,9 @@ class InitiativeHandler(BaseHTTPRequestHandler):
                             raise ValueError('itemId must contain a slug after "::"')
                         if re.search(r'[^a-z0-9\-]', item_slug):
                             raise ValueError('Invalid slug in itemId')
-                        self.add_note(note_init_id, {'note': f'[REMINDER] Completed: {item_slug}'})
+                        dashboard_url = self.build_dashboard_url(note_init_id, tab='notes')
+                        activity_note = f'[REMINDER] Completed: {item_slug} | Open dashboard: [{note_init_id}]({dashboard_url})'
+                        self.add_note(note_init_id, {'note': activity_note})
                     except Exception as audit_err:
                         print(f"Warning: audit note failed: {audit_err}")
 

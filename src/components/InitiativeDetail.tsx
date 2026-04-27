@@ -7,6 +7,7 @@ import { marked } from 'marked';
 interface InitiativeDetailProps {
   initiativeId: string;
   directory: string | null;
+  initialTab?: TabName;
   onBack: () => void;
 }
 
@@ -17,9 +18,9 @@ const TAB_LABELS: Record<TabName, string> = {
   links: 'Links',
 };
 
-const InitiativeDetail: React.FC<InitiativeDetailProps> = ({ initiativeId, directory, onBack }) => {
+const InitiativeDetail: React.FC<InitiativeDetailProps> = ({ initiativeId, directory, initialTab, onBack }) => {
   const [detail, setDetail] = useState<ServerInitiativeDetail | null>(null);
-  const [activeTab, setActiveTab] = useState<TabName>('readme');
+  const [activeTab, setActiveTab] = useState<TabName>(initialTab || 'readme');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,6 +54,12 @@ const InitiativeDetail: React.FC<InitiativeDetailProps> = ({ initiativeId, direc
   useEffect(() => {
     loadDetail();
   }, [initiativeId, directory]);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initiativeId, initialTab]);
 
   const handleStartEdit = () => {
     if (!detail) return;

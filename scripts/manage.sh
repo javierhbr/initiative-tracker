@@ -174,7 +174,9 @@ USAGE:
     ./manage.sh install-reminders  Install macOS reminder daemon
     ./manage.sh uninstall-reminders Remove macOS reminder daemon
     ./manage.sh reminders-status   Check reminder daemon status
-    ./manage.sh reminders-test     Run reminder daemon once (test)
+    ./manage.sh reminders-test [--force]
+                                   Run reminder daemon once (test)
+    ./manage.sh reminders-reset    Reset reminder state and locks
     ./manage.sh --help             Show this help
 
 EXAMPLES:
@@ -716,6 +718,11 @@ interactive_mode() {
         echo "7) Restart web server"
         echo "8) Server status"
         echo "9) Open UI in browser"
+        echo "10) Install reminders (macOS launchd)"
+        echo "11) Uninstall reminders"
+        echo "12) Reminders status"
+        echo "13) Test reminders now"
+        echo "14) Reset reminders state"
         echo "h) Help"
         echo "0) Exit"
         echo ""
@@ -763,6 +770,36 @@ interactive_mode() {
             9)
                 echo ""
                 cmd_open_ui
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            10)
+                echo ""
+                cmd_install_reminders
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            11)
+                echo ""
+                cmd_uninstall_reminders
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            12)
+                echo ""
+                cmd_reminders_status
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            13)
+                echo ""
+                cmd_reminders_test
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            14)
+                echo ""
+                cmd_reminders_reset
                 echo ""
                 read -p "Press Enter to continue..."
                 ;;
@@ -850,13 +887,49 @@ cmd_reminders_status() {
 }
 
 cmd_reminders_test() {
+    local force_flag="$1"
     if [ ! -f "$DAEMON_SCRIPT" ]; then
         echo "✗ Daemon script not found: $DAEMON_SCRIPT"
         return 1
     fi
     chmod +x "$DAEMON_SCRIPT"
-    echo "Running reminder daemon once (test mode)..."
-    bash "$DAEMON_SCRIPT" once
+    if [ "$force_flag" = "--force" ]; then
+        echo "Running reminder daemon once (test mode, force display)..."
+        bash "$DAEMON_SCRIPT" --once --force
+    else
+        echo "Running reminder daemon once (test mode)..."
+        bash "$DAEMON_SCRIPT" --once
+    fi
+}
+
+cmd_reminders_reset() {
+    local project_root state_file_rel state_file
+    project_root="$SCRIPT_DIR/.."
+    state_file_rel=$(jq -r '.reminders.stateFile // ".reminders-state.json"' "$CONFIG_FILE")
+
+    if [ -f "$REMINDER_LOCK" ]; then
+        local pid
+        pid=$(cat "$REMINDER_LOCK" 2>/dev/null || true)
+        if [ -n "$pid" ] && ps -p "$pid" > /dev/null 2>&1; then
+            kill "$pid" 2>/dev/null || true
+            echo "✓ Stopped running reminder daemon (PID: $pid)"
+        fi
+    fi
+
+    if [[ "$state_file_rel" = /* ]]; then
+        state_file="$state_file_rel"
+    else
+        state_file="$project_root/$state_file_rel"
+    fi
+
+    rm -f "$state_file"
+    rm -f "$REMINDER_LOCK"
+
+    echo "✓ Reminder state reset"
+    echo "  Removed state file: $state_file"
+    echo "  Removed lock file:  $REMINDER_LOCK"
+    echo ""
+    echo "Tip: Run '$0 reminders-test --force' to immediately show reminders again."
 }
 
 # ============================================================================
@@ -913,7 +986,11 @@ elif [ "$1" = "reminders-status" ]; then
     cmd_reminders_status
     exit $?
 elif [ "$1" = "reminders-test" ]; then
-    cmd_reminders_test
+    shift
+    cmd_reminders_test "$@"
+    exit $?
+elif [ "$1" = "reminders-reset" ]; then
+    cmd_reminders_reset
     exit $?
 else
     echo "✗ Error: Unknown subcommand '$1'"

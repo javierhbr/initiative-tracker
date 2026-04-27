@@ -1,7 +1,7 @@
 #!/bin/bash
 # Initiative Tracker Reminder Daemon
 # Polls GET /api/reminders/check and shows osascript dialogs during workday
-# Usage: scripts/reminder-daemon.sh [once]
+# Usage: scripts/reminder-daemon.sh [once|--once] [--force]
 
 set -e
 
@@ -66,6 +66,41 @@ post_action() {
         -d "{\"action\":\"${action}\",\"itemId\":\"${item_id}\"}" > /dev/null 2>&1
 }
 
+# Open dashboard URL with fallbacks and logging
+open_dashboard_url() {
+    local dashboard_url="$1"
+    if [ -z "$dashboard_url" ]; then
+        return 1
+    fi
+
+    if open "$dashboard_url" >/dev/null 2>&1; then
+        log "Opened dashboard URL via 'open': $dashboard_url"
+        return 0
+    fi
+
+    # Fallback for environments where `open` fails.
+    if osascript -e "open location \"$dashboard_url\"" >/dev/null 2>&1; then
+        log "Opened dashboard URL via AppleScript: $dashboard_url"
+        return 0
+    fi
+
+    log "Failed to open dashboard URL: $dashboard_url"
+    return 1
+}
+
+# Build a deterministic dashboard URL for an item using itemId as source of truth.
+build_item_dashboard_url() {
+    local base_url="$1" item_id="$2" directory_name="$3"
+    local initiative_id
+    initiative_id="${item_id%%::*}"
+
+    if [ -n "$directory_name" ]; then
+        printf '%s/%s?directory=%s&tab=notes' "$base_url" "$initiative_id" "$directory_name"
+    else
+        printf '%s/%s?tab=notes' "$base_url" "$initiative_id"
+    fi
+}
+
 # Show osascript dialog for one item, return user choice
 show_dialog() {
     local item_text="$1" initiative_id="$2" overdue="$3"
@@ -84,11 +119,23 @@ ${item_text}"
     local escaped_message escaped_title
     escaped_message=$(printf '%s' "$message" | sed 's/\\/\\\\/g; s/"/\\"/g')
     escaped_title=$(printf '%s' "$title" | sed 's/\\/\\\\/g; s/"/\\"/g')
-    # Returns button name chosen (Done / Snooze / Dismiss)
-    osascript -e "button returned of (display dialog \"${escaped_message}\" with title \"${escaped_title}\" buttons {\"Dismiss\", \"Snooze\", \"Done\"} default button \"Done\")" 2>/dev/null || echo "Dismiss"
+
+    # AppleScript dialogs support at most 3 buttons.
+    # Use Close/Snooze/Complete and auto-open UI on Complete.
+    local result
+    result=$(osascript <<EOF 2>&1
+try
+    return button returned of (display dialog "${escaped_message}" with title "${escaped_title}" buttons {"Close", "Snooze", "Complete"} default button "Complete" cancel button "Close")
+on error errMsg number errNum
+    return "__ERROR__:" & errNum & ":" & errMsg
+end try
+EOF
+)
+    echo "$result"
 }
 
 run_once() {
+    local force_mode="$1"
     local url
     url=$(get_server_url)
 
@@ -99,55 +146,100 @@ run_once() {
         return 0
     fi
 
+    local endpoint="/api/reminders/check"
+    if [ "$force_mode" = "true" ]; then
+        endpoint="/api/reminders/daily"
+    fi
+
     local response
-    response=$(curl -sf --max-time 10 "${url}/api/reminders/check" 2>/dev/null || echo "")
+    response=$(curl -sf --max-time 10 "${url}${endpoint}" 2>/dev/null || echo "")
 
     if [ -z "$response" ]; then
-        log "Empty response from /api/reminders/check"
+        log "Empty response from ${endpoint}"
         return 0
     fi
 
     local due
     due=$(echo "$response" | jq -r '.due // false')
 
-    if [ "$due" != "true" ]; then
+    if [ "$force_mode" != "true" ] && [ "$due" != "true" ]; then
         log "No reminders due (inWorkday=$(echo "$response" | jq -r '.inWorkday'), snoozeActive=$(echo "$response" | jq -r '.snoozeActive'))"
         return 0
     fi
 
     local items_count
     items_count=$(echo "$response" | jq '.items | length')
+    if [ "$items_count" -eq 0 ]; then
+        log "No pending reminder items to show"
+        return 0
+    fi
     log "Reminders due. Showing $items_count items."
 
     # Iterate items and show one dialog per item (up to 3 per run to avoid storms)
     local shown=0
     while IFS= read -r item; do
         [ $shown -ge 3 ] && break
-        local item_id item_text initiative_id overdue
+        local item_id item_text initiative_id overdue dashboard_url item_directory expected_dashboard_url
         item_id=$(echo "$item" | jq -r '.id')
         item_text=$(echo "$item" | jq -r '.text')
         initiative_id=$(echo "$item" | jq -r '.initiativeId')
         overdue=$(echo "$item" | jq -r '.overdue')
+        dashboard_url=$(echo "$item" | jq -r '.dashboardUrl // empty')
+        item_directory=$(echo "$item" | jq -r '.directory // empty')
+        expected_dashboard_url=$(build_item_dashboard_url "$url" "$item_id" "$item_directory")
+
+        # Enforce that opened URL matches current itemId (prevents wrong-initiative opens).
+        if [ -z "$dashboard_url" ] || [[ "$dashboard_url" != *"/${item_id%%::*}"* ]]; then
+            dashboard_url="$expected_dashboard_url"
+        fi
 
         local choice
         choice=$(show_dialog "$item_text" "$initiative_id" "$overdue")
+
+        if [[ "$choice" == __ERROR__:* ]]; then
+            log "Dialog error for item $item_id: $choice"
+            choice="Dismiss"
+        fi
+
         log "User chose '$choice' for item: $item_id"
 
         case "$choice" in
-            Done)    post_action "$url" "done" "$item_id" ;;
+            Complete)
+                post_action "$url" "done" "$item_id"
+                open_dashboard_url "$dashboard_url" || true
+                ;;
             Snooze)  post_action "$url" "snooze" "$item_id" ;;
-            *)       post_action "$url" "dismiss" "$item_id" ;;
+            Close|*) post_action "$url" "dismiss" "$item_id" ;;
         esac
 
         shown=$((shown + 1))
     done < <(echo "$response" | jq -c '.items[]')
 }
 
+# Parse args
+ONCE_MODE="false"
+FORCE_MODE="false"
+for arg in "$@"; do
+    case "$arg" in
+        once|--once)
+            ONCE_MODE="true"
+            ;;
+        --force)
+            FORCE_MODE="true"
+            ;;
+    esac
+done
+
+# Safety: --force without --once should not start an endless interactive loop.
+if [ "$FORCE_MODE" = "true" ] && [ "$ONCE_MODE" != "true" ]; then
+    ONCE_MODE="true"
+fi
+
 # Run once and exit (for testing or launchd single-shot)
-if [ "${1}" = "once" ]; then
+if [ "$ONCE_MODE" = "true" ]; then
     acquire_lock
     trap release_lock EXIT
-    run_once
+    run_once "$FORCE_MODE"
     exit 0
 fi
 
@@ -157,6 +249,6 @@ trap release_lock EXIT
 
 log "Reminder daemon started (PID: $$)"
 while true; do
-    run_once
+    run_once "$FORCE_MODE"
     sleep 60
 done
