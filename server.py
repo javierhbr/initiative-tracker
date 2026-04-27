@@ -251,7 +251,7 @@ class InitiativeHandler(BaseHTTPRequestHandler):
         return True
 
     def _make_slug(self, text):
-        """Stable slug from text: lowercase, spaces→hyphen, strip non-alnum/-,  truncate 40."""
+        """Stable slug from text: lowercase, spaces->hyphen, strip non-alnum/-, truncate 40."""
         slug = text.lower()
         slug = re.sub(r'\s+', '-', slug)
         slug = re.sub(r'[^a-z0-9\-]', '', slug)
@@ -575,30 +575,16 @@ class InitiativeHandler(BaseHTTPRequestHandler):
 
                 if action == 'done':
                     per_item.setdefault(item_id, {})['completed_at'] = now_iso
-                    # Audit note in initiative notes.md
+                    # Audit note in initiative notes.md — delegate to add_note (already validates init_id)
                     try:
-                        init_id = item_id.split('::')[0]
-                        item_slug = item_id.split('::')[1] if '::' in item_id else item_id
-                        # Validate both parts to prevent path traversal
-                        if '..' in init_id or '/' in init_id:
-                            raise ValueError('Invalid initiative ID in itemId')
+                        parts = item_id.split('::', 1)
+                        note_init_id = parts[0]
+                        item_slug = parts[1] if len(parts) == 2 and parts[1] else None
+                        if not item_slug:
+                            raise ValueError('itemId must contain a slug after "::"')
                         if re.search(r'[^a-z0-9\-]', item_slug):
                             raise ValueError('Invalid slug in itemId')
-                        dir_path = self.get_initiatives_dir(None)
-                        # Resolve and verify path stays within dir_path
-                        notes_file = (dir_path / init_id / 'notes.md').resolve()
-                        if not str(notes_file).startswith(str(dir_path.resolve())):
-                            raise ValueError('Path traversal detected')
-                        if notes_file.exists():
-                            today = datetime.now().strftime('%Y-%m-%d')
-                            content = notes_file.read_text()
-                            entry = f"- [REMINDER] Completed: {item_slug}\n"
-                            if f"## {today}" in content:
-                                with open(notes_file, 'a') as nf:
-                                    nf.write(entry)
-                            else:
-                                with open(notes_file, 'a') as nf:
-                                    nf.write(f"\n## {today}\n{entry}")
+                        self.add_note(note_init_id, {'note': f'[REMINDER] Completed: {item_slug}'})
                     except Exception as audit_err:
                         print(f"Warning: audit note failed: {audit_err}")
 

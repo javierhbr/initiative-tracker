@@ -70,10 +70,10 @@ const App: React.FC = () => {
         setReminderData(data);
         if (data.pendingCount > 0) {
           const today = new Date().toISOString().slice(0, 10);
-          const key = `reminder-modal-shown-${today}`;
-          if (!localStorage.getItem(key)) {
+          const shownDate = localStorage.getItem('reminder-modal-last-shown');
+          if (shownDate !== today) {
             setShowReminderModal(true);
-            localStorage.setItem(key, '1');
+            localStorage.setItem('reminder-modal-last-shown', today);
           }
         }
       })
