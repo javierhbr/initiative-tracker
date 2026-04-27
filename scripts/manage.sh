@@ -171,6 +171,12 @@ USAGE:
     ./manage.sh restart            Restart web server
     ./manage.sh status             Check server status
     ./manage.sh open-ui            Open UI in browser
+    ./manage.sh install-reminders  Install macOS reminder daemon
+    ./manage.sh uninstall-reminders Remove macOS reminder daemon
+    ./manage.sh reminders-status   Check reminder daemon status
+    ./manage.sh reminders-test [--force]
+                                   Run reminder daemon once (test)
+    ./manage.sh reminders-reset    Reset reminder state and locks
     ./manage.sh --help             Show this help
 
 EXAMPLES:
@@ -712,6 +718,11 @@ interactive_mode() {
         echo "7) Restart web server"
         echo "8) Server status"
         echo "9) Open UI in browser"
+        echo "10) Install reminders (macOS launchd)"
+        echo "11) Uninstall reminders"
+        echo "12) Reminders status"
+        echo "13) Test reminders now"
+        echo "14) Reset reminders state"
         echo "h) Help"
         echo "0) Exit"
         echo ""
@@ -762,6 +773,36 @@ interactive_mode() {
                 echo ""
                 read -p "Press Enter to continue..."
                 ;;
+            10)
+                echo ""
+                cmd_install_reminders
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            11)
+                echo ""
+                cmd_uninstall_reminders
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            12)
+                echo ""
+                cmd_reminders_status
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            13)
+                echo ""
+                cmd_reminders_test
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            14)
+                echo ""
+                cmd_reminders_reset
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
             h|H)
                 show_help
                 read -p "Press Enter to continue..."
@@ -779,6 +820,116 @@ interactive_mode() {
                 ;;
         esac
     done
+}
+
+# ============================================================================
+# Reminder Daemon Functions
+# ============================================================================
+
+DAEMON_SCRIPT="$SCRIPT_DIR/reminder-daemon.sh"
+PLIST_TEMPLATE="$SCRIPT_DIR/org.initiative-tracker.reminders.plist"
+REMINDER_LOCK="$SCRIPT_DIR/../.reminder-daemon.lock"
+LAUNCHD_LABEL="org.initiative-tracker.reminders"
+LAUNCHD_PLIST="$HOME/Library/LaunchAgents/${LAUNCHD_LABEL}.plist"
+
+cmd_install_reminders() {
+    if [[ "$OSTYPE" != "darwin"* ]]; then
+        echo "✗ Reminders launchd integration is macOS-only"
+        return 1
+    fi
+    if [ ! -f "$PLIST_TEMPLATE" ]; then
+        echo "✗ Plist template not found: $PLIST_TEMPLATE"
+        return 1
+    fi
+    local log_path="$SCRIPT_DIR/../.reminder-daemon.log"
+    local daemon_path
+    daemon_path="$(cd "$SCRIPT_DIR" && pwd)/reminder-daemon.sh"
+    chmod +x "$DAEMON_SCRIPT"
+    mkdir -p "$HOME/Library/LaunchAgents"
+    sed "s|__DAEMON_PATH__|$daemon_path|g; s|__LOG_PATH__|$log_path|g" "$PLIST_TEMPLATE" > "$LAUNCHD_PLIST"
+    launchctl load "$LAUNCHD_PLIST" 2>/dev/null || launchctl bootstrap gui/"$(id -u)" "$LAUNCHD_PLIST" 2>/dev/null
+    echo "✓ Reminders installed and scheduled (every 2 hours)"
+    echo "  Plist: $LAUNCHD_PLIST"
+    echo "  Log:   $log_path"
+}
+
+cmd_uninstall_reminders() {
+    if [[ "$OSTYPE" != "darwin"* ]]; then
+        echo "✗ Reminders launchd integration is macOS-only"
+        return 1
+    fi
+    if launchctl list | grep -q "$LAUNCHD_LABEL"; then
+        launchctl unload "$LAUNCHD_PLIST" 2>/dev/null || launchctl bootout gui/"$(id -u)" "$LAUNCHD_PLIST" 2>/dev/null
+        echo "✓ Reminders unscheduled"
+    fi
+    rm -f "$LAUNCHD_PLIST"
+    echo "✓ Plist removed"
+}
+
+cmd_reminders_status() {
+    if [[ "$OSTYPE" != "darwin"* ]]; then
+        echo "Reminders launchd status is macOS-only."
+        return 0
+    fi
+    if launchctl list | grep -q "$LAUNCHD_LABEL"; then
+        echo "✓ Reminders daemon is scheduled via launchd"
+    else
+        echo "✗ Reminders daemon is NOT scheduled"
+    fi
+    if [ -f "$REMINDER_LOCK" ]; then
+        local pid; pid=$(cat "$REMINDER_LOCK")
+        if ps -p "$pid" > /dev/null 2>&1; then
+            echo "  Daemon running (PID: $pid)"
+        else
+            echo "  Lock file stale (PID: $pid not running)"
+        fi
+    fi
+}
+
+cmd_reminders_test() {
+    local force_flag="$1"
+    if [ ! -f "$DAEMON_SCRIPT" ]; then
+        echo "✗ Daemon script not found: $DAEMON_SCRIPT"
+        return 1
+    fi
+    chmod +x "$DAEMON_SCRIPT"
+    if [ "$force_flag" = "--force" ]; then
+        echo "Running reminder daemon once (test mode, force display)..."
+        bash "$DAEMON_SCRIPT" --once --force
+    else
+        echo "Running reminder daemon once (test mode)..."
+        bash "$DAEMON_SCRIPT" --once
+    fi
+}
+
+cmd_reminders_reset() {
+    local project_root state_file_rel state_file
+    project_root="$SCRIPT_DIR/.."
+    state_file_rel=$(jq -r '.reminders.stateFile // ".reminders-state.json"' "$CONFIG_FILE")
+
+    if [ -f "$REMINDER_LOCK" ]; then
+        local pid
+        pid=$(cat "$REMINDER_LOCK" 2>/dev/null || true)
+        if [ -n "$pid" ] && ps -p "$pid" > /dev/null 2>&1; then
+            kill "$pid" 2>/dev/null || true
+            echo "✓ Stopped running reminder daemon (PID: $pid)"
+        fi
+    fi
+
+    if [[ "$state_file_rel" = /* ]]; then
+        state_file="$state_file_rel"
+    else
+        state_file="$project_root/$state_file_rel"
+    fi
+
+    rm -f "$state_file"
+    rm -f "$REMINDER_LOCK"
+
+    echo "✓ Reminder state reset"
+    echo "  Removed state file: $state_file"
+    echo "  Removed lock file:  $REMINDER_LOCK"
+    echo ""
+    echo "Tip: Run '$0 reminders-test --force' to immediately show reminders again."
 }
 
 # ============================================================================
@@ -824,6 +975,22 @@ elif [ "$1" = "status" ]; then
     exit $?
 elif [ "$1" = "open-ui" ]; then
     cmd_open_ui
+    exit $?
+elif [ "$1" = "install-reminders" ]; then
+    cmd_install_reminders
+    exit $?
+elif [ "$1" = "uninstall-reminders" ]; then
+    cmd_uninstall_reminders
+    exit $?
+elif [ "$1" = "reminders-status" ]; then
+    cmd_reminders_status
+    exit $?
+elif [ "$1" = "reminders-test" ]; then
+    shift
+    cmd_reminders_test "$@"
+    exit $?
+elif [ "$1" = "reminders-reset" ]; then
+    cmd_reminders_reset
     exit $?
 else
     echo "✗ Error: Unknown subcommand '$1'"

@@ -58,7 +58,25 @@ export interface AppConfig {
 export type ViewMode = 'List' | 'Board';
 export type TabName = 'readme' | 'notes' | 'comms' | 'links';
 
-// Map server status strings to enum
+// Reminder types
+export interface ReminderItem {
+  id: string;
+  text: string;
+  initiativeId: string;
+  initiativeTitle: string;
+  overdue: boolean;
+}
+
+export interface ReminderCheckResponse {
+  due: boolean;
+  inWorkday: boolean;
+  snoozeActive: boolean;
+  snoozedUntil: string | null;
+  pendingCount: number;
+  items: ReminderItem[];
+}
+
+export type ReminderAction = 'done' | 'snooze' | 'dismiss';
 export function mapStatus(status: string): InitiativeStatus {
   const statusMap: Record<string, InitiativeStatus> = {
     'Idea': InitiativeStatus.IDEA,

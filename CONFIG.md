@@ -130,3 +130,60 @@ The bash scripts (`add-note.sh`, `add-comm.sh`, `new-initiative.sh`) continue to
 - If no directory is marked as default, the first one is used
 - Directory paths are validated to prevent directory traversal attacks
 - The server must have read/write permissions to all configured directories
+
+## Reminders
+
+The optional `reminders` block enables a macOS reminder daemon that polls your initiatives and shows follow-up dialogs during working hours.
+
+```json
+"reminders": {
+  "enabled": true,
+  "workdayStart": "09:00",
+  "workdayEnd": "18:00",
+  "workdays": [1, 2, 3, 4, 5],
+  "cadenceMinutes": 120,
+  "snoozeMinutes": 30,
+  "maxDialogsPerDay": 8,
+  "stateFile": ".reminders-state.json",
+  "checklistDefaults": [
+    "Review initiative status and update if needed",
+    "Check for new blockers or risks",
+    "Follow up on pending communications",
+    "Update milestone progress"
+  ]
+}
+```
+
+### Reminder Options
+
+- **enabled**: Master switch to enable/disable reminders (default: `true`)
+- **workdayStart**: Earliest time to show reminders (24-hour `HH:MM`, default: `"09:00"`)
+- **workdayEnd**: Latest time to show reminders (24-hour `HH:MM`, default: `"18:00"`)
+- **workdays**: Days of week to show reminders — 1=Monday … 7=Sunday (default: `[1,2,3,4,5]`)
+- **cadenceMinutes**: Minimum minutes between reminder dialogs (default: `120`)
+- **snoozeMinutes**: How long a snooze suppresses reminders (default: `30`)
+- **maxDialogsPerDay**: Hard cap on dialogs shown per calendar day (default: `8`)
+- **stateFile**: Path (relative to project root) for persisting reminder state (default: `".reminders-state.json"`)
+- **checklistDefaults**: List of default follow-up prompts shown for every initiative
+
+### Per-initiative Checklist Overrides
+
+Add lines tagged `<!-- reminder-item: SLUG -->` to an initiative's `notes.md` to override its checklist:
+
+```markdown
+- Review security sign-off <!-- reminder-item: review-security-sign-off -->
+- Check vendor timeline <!-- reminder-item: check-vendor-timeline -->
+```
+
+### macOS Integration
+
+Install the launchd daemon to run reminders automatically every 2 hours:
+
+```bash
+./scripts/manage.sh install-reminders    # Register with launchd
+./scripts/manage.sh reminders-status     # Check daemon status
+./scripts/manage.sh reminders-test       # Run once immediately
+./scripts/manage.sh uninstall-reminders  # Remove from launchd
+```
+
+The daemon requires `jq` and runs `osascript` dialogs on macOS only.

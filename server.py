@@ -22,7 +22,7 @@ import os
 import re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, quote
 from datetime import datetime
 
 
@@ -115,6 +115,32 @@ class InitiativeHandler(BaseHTTPRequestHandler):
         default_dir = self.get_default_directory()
         return default_dir['path'] if default_dir else Path('./initiatives')
 
+    def find_directory_name_for_initiative(self, init_id):
+        """Find the configured directory name that contains the initiative."""
+        for d in self.DIRECTORIES:
+            if (d['path'] / init_id).exists():
+                return d['name']
+        default_dir = self.get_default_directory()
+        return default_dir['name'] if default_dir else None
+
+    def build_dashboard_url(self, init_id, dir_name=None, tab='notes'):
+        """Build a URL that opens the initiative in the web dashboard."""
+        host = CONFIG.get('server', {}).get('host', 'localhost')
+        port = CONFIG.get('server', {}).get('port', 3939)
+        # 0.0.0.0 is not navigable in browsers; use localhost for links.
+        if host == '0.0.0.0':
+            host = 'localhost'
+
+        resolved_dir_name = dir_name or self.find_directory_name_for_initiative(init_id)
+        params = []
+        if resolved_dir_name:
+            params.append(f"directory={quote(str(resolved_dir_name))}")
+        if tab:
+            params.append(f"tab={quote(str(tab))}")
+        query = f"?{'&'.join(params)}" if params else ''
+
+        return f"http://{host}:{port}/{quote(str(init_id))}{query}"
+
     def log_message(self, format, *args):
         """Override to provide cleaner logging"""
         print(f"[{self.log_date_time_string()}] {format % args}")
@@ -137,6 +163,209 @@ class InitiativeHandler(BaseHTTPRequestHandler):
                 self.wfile.write(f.read())
         except FileNotFoundError:
             self.send_error(404, 'File not found')
+
+    # =========================================================================
+    # Reminder helpers
+    # =========================================================================
+
+    def get_reminder_config(self):
+        """Return the reminders block from CONFIG or safe defaults."""
+        defaults = {
+            'enabled': True,
+            'workdayStart': '09:00',
+            'workdayEnd': '18:00',
+            'workdays': [1, 2, 3, 4, 5],
+            'cadenceMinutes': 120,
+            'snoozeMinutes': 30,
+            'maxDialogsPerDay': 8,
+            'stateFile': '.reminders-state.json',
+            'checklistDefaults': [
+                'Review initiative status and update if needed',
+                'Check for new blockers or risks',
+                'Follow up on pending communications',
+                'Update milestone progress',
+            ],
+        }
+        cfg = CONFIG.get('reminders', {})
+        merged = {**defaults, **cfg}
+        return merged
+
+    def load_reminder_state(self):
+        """Read .reminders-state.json; return dict with safe defaults."""
+        rcfg = self.get_reminder_config()
+        state_path = Path(rcfg['stateFile'])
+        default_state = {
+            'last_shown': None,
+            'snoozed_until': None,
+            'per_item': {},
+            'dialogs_today': 0,
+            'dialogs_date': None,
+        }
+        if not state_path.exists():
+            return default_state
+        try:
+            with open(state_path, 'r') as f:
+                data = json.load(f)
+            # Merge to ensure all keys present
+            return {**default_state, **data}
+        except Exception:
+            return default_state
+
+    def save_reminder_state(self, state):
+        """Write state to .reminders-state.json."""
+        rcfg = self.get_reminder_config()
+        state_path = Path(rcfg['stateFile'])
+        try:
+            with open(state_path, 'w') as f:
+                json.dump(state, f, indent=2)
+                f.write('\n')
+        except Exception as e:
+            print(f"Warning: could not save reminder state: {e}")
+
+    def is_workday_and_hours(self):
+        """Return True if now is within a configured workday and hour window."""
+        rcfg = self.get_reminder_config()
+        if not rcfg.get('enabled', True):
+            return False
+        now = datetime.now()
+        # isoweekday: 1=Monday … 7=Sunday
+        if now.isoweekday() not in rcfg.get('workdays', [1, 2, 3, 4, 5]):
+            return False
+        try:
+            start_h, start_m = [int(x) for x in rcfg['workdayStart'].split(':')]
+            end_h, end_m = [int(x) for x in rcfg['workdayEnd'].split(':')]
+        except Exception:
+            return False
+        start_minutes = start_h * 60 + start_m
+        end_minutes = end_h * 60 + end_m
+        current_minutes = now.hour * 60 + now.minute
+        return start_minutes <= current_minutes < end_minutes
+
+    def is_due_for_reminder(self, state):
+        """Return True if cadenceMinutes has elapsed and no active snooze."""
+        rcfg = self.get_reminder_config()
+        now = datetime.now()
+
+        # Check snooze
+        snoozed_until = state.get('snoozed_until')
+        if snoozed_until:
+            try:
+                snooze_dt = datetime.fromisoformat(snoozed_until)
+                if now < snooze_dt:
+                    return False
+            except Exception:
+                pass
+
+        # Check cadence
+        last_shown = state.get('last_shown')
+        if last_shown:
+            try:
+                last_dt = datetime.fromisoformat(last_shown)
+                elapsed = (now - last_dt).total_seconds() / 60
+                if elapsed < rcfg.get('cadenceMinutes', 120):
+                    return False
+            except Exception:
+                pass
+
+        # Check daily dialog cap
+        today = now.strftime('%Y-%m-%d')
+        dialogs_date = state.get('dialogs_date')
+        dialogs_today = state.get('dialogs_today', 0) if dialogs_date == today else 0
+        if dialogs_today >= rcfg.get('maxDialogsPerDay', 8):
+            return False
+
+        return True
+
+    def _make_slug(self, text):
+        """Stable slug from text: lowercase, spaces->hyphen, strip non-alnum/-, truncate 40."""
+        slug = text.lower()
+        slug = re.sub(r'\s+', '-', slug)
+        slug = re.sub(r'[^a-z0-9\-]', '', slug)
+        return slug[:40]
+
+    def build_checklist(self, init_id, init_dir):
+        """Return list of checklist item dicts for an initiative.
+
+        Looks for lines tagged <!-- reminder-item: SLUG --> in notes.md;
+        falls back to checklistDefaults from config.
+        """
+        rcfg = self.get_reminder_config()
+        defaults = rcfg.get('checklistDefaults', [])
+        items = []
+
+        # Try per-initiative overrides from notes.md
+        notes_path = init_dir / init_id / 'notes.md'
+        if notes_path.exists():
+            try:
+                content = notes_path.read_text()
+                pattern = re.compile(r'^[-*]\s+(.+?)\s+<!--\s*reminder-item:\s*([^>]+?)\s*-->', re.MULTILINE)
+                matches = pattern.findall(content)
+                if matches:
+                    for text, slug in matches:
+                        items.append({'text': text.strip(), 'slug': slug.strip()})
+                    return items
+            except Exception:
+                pass
+
+        # Fall back to defaults
+        for text in defaults:
+            items.append({'text': text, 'slug': self._make_slug(text)})
+        return items
+
+    def compute_pending_items(self, state, initiatives_list, dir_path):
+        """Build list of pending reminder items across initiatives.
+
+        Returns list of item dicts with keys:
+          id, text, initiativeId, initiativeTitle, overdue
+        """
+        today = datetime.now().strftime('%Y-%m-%d')
+        per_item = state.get('per_item', {})
+        result = []
+
+        for init_info in initiatives_list:
+            init_id = init_info['id']
+            init_title = init_info.get('name', init_id)
+            deadline_str = init_info.get('deadline', '')
+            blockers = init_info.get('blockers', 0)
+
+            # Determine overdue flag
+            overdue = False
+            if blockers and int(blockers) > 0:
+                overdue = True
+            if deadline_str:
+                try:
+                    dl = datetime.strptime(deadline_str, '%Y-%m-%d')
+                    if dl < datetime.now():
+                        overdue = True
+                except Exception:
+                    pass
+
+            checklist = self.build_checklist(init_id, dir_path)
+            for item in checklist:
+                item_id = f"{init_id}::{item['slug']}"
+                item_state = per_item.get(item_id, {})
+
+                # Skip if completed today
+                completed_at = item_state.get('completed_at')
+                if completed_at and completed_at.startswith(today):
+                    continue
+
+                # Skip if dismissed today
+                dismissed_at = item_state.get('dismissed_at')
+                if dismissed_at and dismissed_at.startswith(today):
+                    continue
+
+                result.append({
+                    'id': item_id,
+                    'text': item['text'],
+                    'initiativeId': init_id,
+                    'initiativeTitle': init_title,
+                    'directory': init_info.get('directory', ''),
+                    'dashboardUrl': self.build_dashboard_url(init_id, init_info.get('directory'), tab='notes'),
+                    'overdue': overdue,
+                })
+
+        return sorted(result, key=lambda x: (not x['overdue'], x['initiativeId']))
 
     def serve_static(self, path):
         """Serve static files from src/dist/, fall back to index.html for SPA routing"""
@@ -244,6 +473,47 @@ class InitiativeHandler(BaseHTTPRequestHandler):
                     self.send_json({'error': str(e)}, 404)
                 return
 
+        # API: Reminders check / daily
+        if path in ('/api/reminders/check', '/api/reminders/daily'):
+            try:
+                dir_name = parse_qs(parsed.query).get('directory', [None])[0]
+                state = self.load_reminder_state()
+                in_workday = self.is_workday_and_hours()
+                snooze_active = False
+                snoozed_until = state.get('snoozed_until')
+                now = datetime.now()
+                if snoozed_until:
+                    try:
+                        if now < datetime.fromisoformat(snoozed_until):
+                            snooze_active = True
+                    except Exception:
+                        pass
+
+                is_due = in_workday and self.is_due_for_reminder(state)
+
+                # Collect initiatives for the pending items list
+                initiatives_list = self.list_initiatives(dir_name)
+                dir_path = self.get_initiatives_dir(dir_name)
+                pending = self.compute_pending_items(state, initiatives_list, dir_path)
+
+                # For /check: only expose items when actually due
+                if path == '/api/reminders/check':
+                    items = pending if is_due else []
+                else:
+                    items = pending
+
+                self.send_json({
+                    'due': is_due,
+                    'inWorkday': in_workday,
+                    'snoozeActive': snooze_active,
+                    'snoozedUntil': snoozed_until,
+                    'pendingCount': len(pending),
+                    'items': items,
+                })
+            except Exception as e:
+                self.send_json({'error': str(e)}, 500)
+            return
+
         # Serve static files from React build (src/dist/)
         self.serve_static(path)
 
@@ -315,6 +585,58 @@ class InitiativeHandler(BaseHTTPRequestHandler):
                 result = self.add_comm(init_id, body)
                 print(f"Comm added successfully: {result}")  # Debug
                 self.send_json(result)
+                return
+
+            # Reminder action
+            if path == '/api/reminders/action':
+                action = body.get('action', '')
+                item_id = body.get('itemId', '')
+                if action not in ('done', 'snooze', 'dismiss'):
+                    raise ValueError('action must be done, snooze, or dismiss')
+                if not item_id:
+                    raise ValueError('itemId is required')
+
+                state = self.load_reminder_state()
+                now_iso = datetime.now().isoformat()
+                per_item = state.setdefault('per_item', {})
+                rcfg = self.get_reminder_config()
+
+                if action == 'done':
+                    per_item.setdefault(item_id, {})['completed_at'] = now_iso
+                    # Audit note in initiative notes.md — delegate to add_note (already validates init_id)
+                    try:
+                        parts = item_id.split('::', 1)
+                        note_init_id = parts[0]
+                        item_slug = parts[1] if len(parts) == 2 and parts[1] else None
+                        if not item_slug:
+                            raise ValueError('itemId must contain a slug after "::"')
+                        if re.search(r'[^a-z0-9\-]', item_slug):
+                            raise ValueError('Invalid slug in itemId')
+                        dashboard_url = self.build_dashboard_url(note_init_id, tab='notes')
+                        activity_note = f'[REMINDER] Completed: {item_slug} | Open dashboard: [{note_init_id}]({dashboard_url})'
+                        self.add_note(note_init_id, {'note': activity_note})
+                    except Exception as audit_err:
+                        print(f"Warning: audit note failed: {audit_err}")
+
+                elif action == 'snooze':
+                    from datetime import timedelta
+                    snooze_mins = rcfg.get('snoozeMinutes', 30)
+                    state['snoozed_until'] = (datetime.now() + timedelta(minutes=snooze_mins)).isoformat()
+
+                elif action == 'dismiss':
+                    per_item.setdefault(item_id, {})['dismissed_at'] = now_iso
+
+                # Update last_shown and dialog count on any action
+                today_str = datetime.now().strftime('%Y-%m-%d')
+                state['last_shown'] = now_iso
+                if state.get('dialogs_date') == today_str:
+                    state['dialogs_today'] = state.get('dialogs_today', 0) + 1
+                else:
+                    state['dialogs_date'] = today_str
+                    state['dialogs_today'] = 1
+
+                self.save_reminder_state(state)
+                self.send_json({'success': True})
                 return
 
             self.send_error(404, 'Not found')

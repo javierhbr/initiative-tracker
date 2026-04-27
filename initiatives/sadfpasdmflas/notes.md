@@ -61,3 +61,17 @@
 - Links & artifacts → `links.md`
 - Notes & decisions → `notes.md`
 - Communications log → `comms.md`
+
+## 2026-04-27
+- [REMINDER] Completed: review-initiative-status-and-update-if-n
+- [REMINDER] Completed: follow-up-on-pending-communications
+- [REMINDER] Completed: follow-up-on-pending-communications
+- [REMINDER] Completed: follow-up-on-pending-communications | Open dashboard: [sadfpasdmflas](http://localhost:3939/sadfpasdmflas?directory=Personal&tab=notes)
+- [REMINDER] Completed: check-for-new-blockers-or-risks | Open dashboard: [sadfpasdmflas](http://localhost:3939/sadfpasdmflas?directory=Personal&tab=notes)
+- [REMINDER] Completed: update-milestone-progress | Open dashboard: [sadfpasdmflas](http://localhost:3939/sadfpasdmflas?directory=Personal&tab=notes)
+- [REMINDER] Completed: review-initiative-status-and-update-if-n | Open dashboard: [sadfpasdmflas](http://localhost:3939/sadfpasdmflas?directory=Personal&tab=notes)
+- [REMINDER] Completed: check-for-new-blockers-or-risks | Open dashboard: [sadfpasdmflas](http://localhost:3939/sadfpasdmflas?directory=Personal&tab=notes)
+- [REMINDER] Completed: follow-up-on-pending-communications | Open dashboard: [sadfpasdmflas](http://localhost:3939/sadfpasdmflas?directory=Personal&tab=notes)
+- [REMINDER] Completed: update-milestone-progress | Open dashboard: [sadfpasdmflas](http://localhost:3939/sadfpasdmflas?directory=Personal&tab=notes)
+- [REMINDER] Completed: follow-up-on-pending-communications | Open dashboard: [sadfpasdmflas](http://localhost:3939/sadfpasdmflas?directory=Personal&tab=notes)
+- [REMINDER] Completed: update-milestone-progress | Open dashboard: [sadfpasdmflas](http://localhost:3939/sadfpasdmflas?directory=Personal&tab=notes)
