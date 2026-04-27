@@ -872,6 +872,65 @@ Revísala para ver cómo se estructura una iniciativa real con:
 
 ---
 
+## 🔔 Local Reminders (macOS)
+
+El sistema incluye un ciclo de recordatorios local para macOS que usa diálogos osascript con acciones Done / Snooze / Dismiss.
+
+### Cómo funciona
+
+- Un daemon sondea `GET /api/reminders/check` cada 2 horas durante el horario laboral configurado
+- Si hay ítems pendientes, muestra un diálogo macOS nativo para cada iniciativa activa
+- Cada acción queda auditada como `[REMINDER]` en el `notes.md` de la iniciativa
+- La UI React muestra un badge 🔔 con el conteo pendiente y un modal diario al iniciar
+
+### Configuración del reminder en config.json
+
+```json
+"reminders": {
+  "enabled": true,
+  "workdayStart": "09:00",
+  "workdayEnd": "18:00",
+  "workdays": [1, 2, 3, 4, 5],
+  "cadenceMinutes": 120,
+  "snoozeMinutes": 30,
+  "maxDialogsPerDay": 8,
+  "stateFile": ".reminders-state.json",
+  "checklistDefaults": [
+    "Review initiative status and update if needed",
+    "Check for new blockers or risks",
+    "Follow up on pending communications",
+    "Update milestone progress"
+  ]
+}
+```
+
+Ver [CONFIG.md](CONFIG.md) para la descripción completa de opciones.
+
+### Instalar/Desinstalar el daemon (macOS)
+
+```bash
+# Instalar recordatorios (crea launchd job, cadencia de 2h)
+./scripts/manage.sh install-reminders
+
+# Ver estado del daemon
+./scripts/manage.sh reminders-status
+
+# Test manual — ejecuta el daemon una vez en el foreground
+./scripts/manage.sh reminders-test
+
+# Desinstalar
+./scripts/manage.sh uninstall-reminders
+```
+
+### Garantías local-only
+
+- Sin dependencias de nube ni push notifications
+- Estado guardado en `.reminders-state.json` (local, no versionado)
+- Auditoría append-only en los `notes.md` de cada iniciativa
+- El daemon requiere que el servidor Python esté corriendo
+
+---
+
 ## 📄 Licencia
 
 Personal use. Adapta como necesites.

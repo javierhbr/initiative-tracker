@@ -182,11 +182,77 @@ pkill -f "python3 server.py"
 - Check the browser console for errors
 - Restart the server
 
+## Reminder System (macOS)
+
+The Initiative Tracker includes a local-only reminder loop using native macOS dialogs.
+
+### How It Works
+
+1. A launchd job (`org.initiative-tracker.reminders`) fires every 2 hours during configured workday hours
+2. The job runs `scripts/reminder-daemon.sh once`, which calls `GET /api/reminders/check`
+3. If reminders are due, `osascript` dialogs appear for each pending item with **Done / Snooze / Dismiss** actions
+4. Done actions append a `[REMINDER]` audit entry to the initiative's `notes.md`
+5. The React UI shows a bell badge (🔔) with pending count and a daily follow-up modal on first load
+
+### Prerequisites
+
+- macOS (launchd integration)
+- The Python server must be running when the daemon fires
+- `jq` installed (`brew install jq`)
+
+### Install the Reminder Daemon
+
+```bash
+# Install and schedule (every 2 hours)
+./scripts/manage.sh install-reminders
+
+# Verify it's scheduled
+./scripts/manage.sh reminders-status
+
+# Test immediately (runs one check in foreground)
+./scripts/manage.sh reminders-test
+
+# Remove
+./scripts/manage.sh uninstall-reminders
+```
+
+The daemon installs a launchd plist to `~/Library/LaunchAgents/org.initiative-tracker.reminders.plist` — it survives reboots automatically.
+
+### Logs & Diagnostics
+
+| File | Purpose |
+|------|---------|
+| `.reminder-daemon.log` | Daemon activity, dialog responses |
+| `.reminders-state.json` | Snooze/done/dismiss state (local only) |
+
+### Troubleshooting
+
+**No dialogs appear:**
+- Check the server is running: `./scripts/manage.sh status`
+- Check daemon log: `cat .reminder-daemon.log`
+- Test manually: `./scripts/manage.sh reminders-test`
+
+**`jq: command not found`:**
+```bash
+brew install jq
+```
+
+**Dialogs appear too frequently:**
+Reduce `maxDialogsPerDay` or increase `cadenceMinutes` in `config.json`.
+
+**Stale lock file (daemon won't start):**
+```bash
+rm .reminder-daemon.lock
+```
+
+---
+
 ## Next Steps
 
 1. **Create your config**: Copy `config.example.json` to `config.json`
 2. **Customize directories**: Add your initiative directories
 3. **Start the server**: Run `python3 server.py`
 4. **Access the UI**: Open http://localhost:3939
+5. **Enable reminders** (macOS): Run `./scripts/manage.sh install-reminders`
 
 Happy tracking! 🚀
