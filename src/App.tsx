@@ -7,8 +7,9 @@ import InitiativeDetail from './components/InitiativeDetail';
 import InitiativeBoard from './components/InitiativeBoard';
 import SettingsModal from './components/SettingsModal';
 import HelpPage from './components/HelpPage';
-import { Initiative, ViewMode, ServerDirectory, SearchResult, toInitiative } from './types';
-import { fetchConfig, fetchDirectories, fetchInitiatives, searchInitiatives, createInitiative, updateFile, fetchInitiativeDetail } from './api';
+import DailyReminderModal from './components/DailyReminderModal';
+import { Initiative, ViewMode, ServerDirectory, SearchResult, toInitiative, ReminderCheckResponse } from './types';
+import { fetchConfig, fetchDirectories, fetchInitiatives, searchInitiatives, createInitiative, updateFile, fetchInitiativeDetail, fetchRemindersDaily } from './api';
 
 const App: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -27,6 +28,8 @@ const App: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [searchResultsInfo, setSearchResultsInfo] = useState<string | null>(null);
   const [searchMatchedIds, setSearchMatchedIds] = useState<Set<string> | null>(null);
+  const [reminderData, setReminderData] = useState<ReminderCheckResponse | null>(null);
+  const [showReminderModal, setShowReminderModal] = useState(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>();
   const searchInfoTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -58,6 +61,25 @@ const App: React.FC = () => {
     fetchConfig()
       .then(config => setInitiativeTypes(config.initiativeTypes || []))
       .catch(() => {});
+  }, []);
+
+  // Load daily reminders on mount
+  useEffect(() => {
+    fetchRemindersDaily()
+      .then(data => {
+        setReminderData(data);
+        if (data.pendingCount > 0) {
+          const today = new Date().toISOString().slice(0, 10);
+          const key = `reminder-modal-shown-${today}`;
+          if (!localStorage.getItem(key)) {
+            setShowReminderModal(true);
+            localStorage.setItem(key, '1');
+          }
+        }
+      })
+      .catch(() => {
+        // Reminders are non-critical — fail silently
+      });
   }, []);
 
   // Load initiatives when directory changes
@@ -234,6 +256,8 @@ const App: React.FC = () => {
         directories={directories}
         currentDirectory={currentDirectory}
         onDirectoryChange={setCurrentDirectory}
+        reminderCount={reminderData?.pendingCount ?? 0}
+        onOpenReminders={() => setShowReminderModal(true)}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -295,6 +319,14 @@ const App: React.FC = () => {
         <SettingsModal
           onClose={() => setShowSettings(false)}
           onSaved={handleSettingsSaved}
+        />
+      )}
+
+      {showReminderModal && reminderData && (
+        <DailyReminderModal
+          data={reminderData}
+          onClose={() => setShowReminderModal(false)}
+          onRefresh={(updated) => setReminderData(updated)}
         />
       )}
 

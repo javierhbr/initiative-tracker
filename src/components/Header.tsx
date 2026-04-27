@@ -16,6 +16,8 @@ interface HeaderProps {
   directories: ServerDirectory[];
   currentDirectory: string | null;
   onDirectoryChange: (dirName: string) => void;
+  reminderCount?: number;
+  onOpenReminders?: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -32,6 +34,8 @@ const Header: React.FC<HeaderProps> = ({
   directories,
   currentDirectory,
   onDirectoryChange,
+  reminderCount,
+  onOpenReminders,
 }) => {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -128,6 +132,20 @@ const Header: React.FC<HeaderProps> = ({
 
           {/* Action Buttons */}
           <div className="flex items-center gap-3 ml-2">
+            {typeof reminderCount === 'number' && onOpenReminders && (
+              <button
+                onClick={onOpenReminders}
+                className="relative w-9 h-9 flex items-center justify-center rounded-full border-2 border-border-light dark:border-border-dark text-slate-500 hover:border-primary hover:text-primary transition-all"
+                title={`${reminderCount} pending follow-up${reminderCount !== 1 ? 's' : ''}`}
+              >
+                <span className="material-icons text-xl">notifications</span>
+                {reminderCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                    {reminderCount > 99 ? '99+' : reminderCount}
+                  </span>
+                )}
+              </button>
+            )}
             <button
               onClick={onNewInitiative}
               className="bg-primary hover:bg-primary-dark text-white text-sm font-semibold px-4 py-1.5 rounded shadow-sm flex items-center gap-1 transition-all"

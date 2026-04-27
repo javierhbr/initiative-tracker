@@ -1,4 +1,4 @@
-import type { ServerInitiative, ServerInitiativeDetail, ServerDirectory, SearchResult, AppConfig } from './types';
+import type { ServerInitiative, ServerInitiativeDetail, ServerDirectory, SearchResult, AppConfig, ReminderCheckResponse, ReminderAction } from './types';
 
 export async function fetchConfig(): Promise<AppConfig> {
   const res = await fetch('/api/config');
@@ -98,5 +98,29 @@ export async function updateFile(
     }
   );
   if (!res.ok) throw new Error('Failed to update file');
+  return res.json();
+}
+
+export async function fetchRemindersCheck(directory?: string): Promise<ReminderCheckResponse> {
+  const params = directory ? `?directory=${encodeURIComponent(directory)}` : '';
+  const res = await fetch(`/api/reminders/check${params}`);
+  if (!res.ok) throw new Error('Failed to fetch reminders');
+  return res.json();
+}
+
+export async function fetchRemindersDaily(directory?: string): Promise<ReminderCheckResponse> {
+  const params = directory ? `?directory=${encodeURIComponent(directory)}` : '';
+  const res = await fetch(`/api/reminders/daily${params}`);
+  if (!res.ok) throw new Error('Failed to fetch daily reminders');
+  return res.json();
+}
+
+export async function postReminderAction(action: ReminderAction, itemId: string): Promise<{ success: boolean }> {
+  const res = await fetch('/api/reminders/action', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, itemId }),
+  });
+  if (!res.ok) throw new Error('Failed to post reminder action');
   return res.json();
 }

@@ -171,6 +171,10 @@ USAGE:
     ./manage.sh restart            Restart web server
     ./manage.sh status             Check server status
     ./manage.sh open-ui            Open UI in browser
+    ./manage.sh install-reminders  Install macOS reminder daemon
+    ./manage.sh uninstall-reminders Remove macOS reminder daemon
+    ./manage.sh reminders-status   Check reminder daemon status
+    ./manage.sh reminders-test     Run reminder daemon once (test)
     ./manage.sh --help             Show this help
 
 EXAMPLES:
@@ -782,6 +786,80 @@ interactive_mode() {
 }
 
 # ============================================================================
+# Reminder Daemon Functions
+# ============================================================================
+
+DAEMON_SCRIPT="$SCRIPT_DIR/reminder-daemon.sh"
+PLIST_TEMPLATE="$SCRIPT_DIR/org.initiative-tracker.reminders.plist"
+REMINDER_LOCK="$SCRIPT_DIR/../.reminder-daemon.lock"
+LAUNCHD_LABEL="org.initiative-tracker.reminders"
+LAUNCHD_PLIST="$HOME/Library/LaunchAgents/${LAUNCHD_LABEL}.plist"
+
+cmd_install_reminders() {
+    if [[ "$OSTYPE" != "darwin"* ]]; then
+        echo "✗ Reminders launchd integration is macOS-only"
+        return 1
+    fi
+    if [ ! -f "$PLIST_TEMPLATE" ]; then
+        echo "✗ Plist template not found: $PLIST_TEMPLATE"
+        return 1
+    fi
+    local log_path="$SCRIPT_DIR/../.reminder-daemon.log"
+    local daemon_path
+    daemon_path="$(cd "$SCRIPT_DIR" && pwd)/reminder-daemon.sh"
+    chmod +x "$DAEMON_SCRIPT"
+    mkdir -p "$HOME/Library/LaunchAgents"
+    sed "s|__DAEMON_PATH__|$daemon_path|g; s|__LOG_PATH__|$log_path|g" "$PLIST_TEMPLATE" > "$LAUNCHD_PLIST"
+    launchctl load "$LAUNCHD_PLIST" 2>/dev/null || launchctl bootstrap gui/"$(id -u)" "$LAUNCHD_PLIST" 2>/dev/null
+    echo "✓ Reminders installed and scheduled (every 2 hours)"
+    echo "  Plist: $LAUNCHD_PLIST"
+    echo "  Log:   $log_path"
+}
+
+cmd_uninstall_reminders() {
+    if [[ "$OSTYPE" != "darwin"* ]]; then
+        echo "✗ Reminders launchd integration is macOS-only"
+        return 1
+    fi
+    if launchctl list | grep -q "$LAUNCHD_LABEL"; then
+        launchctl unload "$LAUNCHD_PLIST" 2>/dev/null || launchctl bootout gui/"$(id -u)" "$LAUNCHD_PLIST" 2>/dev/null
+        echo "✓ Reminders unscheduled"
+    fi
+    rm -f "$LAUNCHD_PLIST"
+    echo "✓ Plist removed"
+}
+
+cmd_reminders_status() {
+    if [[ "$OSTYPE" != "darwin"* ]]; then
+        echo "Reminders launchd status is macOS-only."
+        return 0
+    fi
+    if launchctl list | grep -q "$LAUNCHD_LABEL"; then
+        echo "✓ Reminders daemon is scheduled via launchd"
+    else
+        echo "✗ Reminders daemon is NOT scheduled"
+    fi
+    if [ -f "$REMINDER_LOCK" ]; then
+        local pid; pid=$(cat "$REMINDER_LOCK")
+        if ps -p "$pid" > /dev/null 2>&1; then
+            echo "  Daemon running (PID: $pid)"
+        else
+            echo "  Lock file stale (PID: $pid not running)"
+        fi
+    fi
+}
+
+cmd_reminders_test() {
+    if [ ! -f "$DAEMON_SCRIPT" ]; then
+        echo "✗ Daemon script not found: $DAEMON_SCRIPT"
+        return 1
+    fi
+    chmod +x "$DAEMON_SCRIPT"
+    echo "Running reminder daemon once (test mode)..."
+    bash "$DAEMON_SCRIPT" once
+}
+
+# ============================================================================
 # Main Entry Point
 # ============================================================================
 
@@ -824,6 +902,18 @@ elif [ "$1" = "status" ]; then
     exit $?
 elif [ "$1" = "open-ui" ]; then
     cmd_open_ui
+    exit $?
+elif [ "$1" = "install-reminders" ]; then
+    cmd_install_reminders
+    exit $?
+elif [ "$1" = "uninstall-reminders" ]; then
+    cmd_uninstall_reminders
+    exit $?
+elif [ "$1" = "reminders-status" ]; then
+    cmd_reminders_status
+    exit $?
+elif [ "$1" = "reminders-test" ]; then
+    cmd_reminders_test
     exit $?
 else
     echo "✗ Error: Unknown subcommand '$1'"
